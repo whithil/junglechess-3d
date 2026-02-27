@@ -1,0 +1,5 @@
+{
+  "preview.serverCommand": "npx http-server",
+  "preview.server.port": 8080,
+  "preview.open": "index.html"
+}
