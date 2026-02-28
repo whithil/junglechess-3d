@@ -821,6 +821,8 @@
         function onTouchEnd(event) {
             if (isPinching) {
                 isPinching = false;
+                // Persist the zoom level after pinching
+                gameGroup.userData.targetScale = gameGroup.scale.x;
             }
         }
 
@@ -848,9 +850,23 @@
         const initialGameScaleVR = new THREE.Vector3();
 
         controller1.addEventListener('selectstart', () => { controller1Selected = true; });
-        controller1.addEventListener('selectend', () => { controller1Selected = false; isZoomingVR = false; });
+        controller1.addEventListener('selectend', () => {
+            controller1Selected = false;
+            if (isZoomingVR) {
+                // Persist the zoom level after VR zoom
+                gameGroup.userData.targetScale = gameGroup.scale.x;
+            }
+            isZoomingVR = false;
+        });
         controller2.addEventListener('selectstart', () => { controller2Selected = true; });
-        controller2.addEventListener('selectend', () => { controller2Selected = false; isZoomingVR = false; });
+        controller2.addEventListener('selectend', () => {
+            controller2Selected = false;
+            if (isZoomingVR) {
+                // Persist the zoom level after VR zoom
+                gameGroup.userData.targetScale = gameGroup.scale.x;
+            }
+            isZoomingVR = false;
+        });
 
 
         function onSelectXR(event) {
