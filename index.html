@@ -909,7 +909,30 @@
                     pd.mesh.scale.x = THREE.MathUtils.lerp(pd.mesh.scale.x, 2.0, 15 * delta);
                     pd.mesh.scale.z = THREE.MathUtils.lerp(pd.mesh.scale.z, 2.0, 15 * delta);
                     if (pd.mesh.scale.y < 0.08) { pd.mesh.visible = false; pd.isDying = false; pd.isDead = true; }
-                } else { pd.mesh.scale.set(1, 1, 1); pd.mesh.position.lerp(pd.targetPos, 10 * delta); }
+                } else { // This block handles pieces at rest (not moving, squashing, or dying)
+                    pd.mesh.scale.set(1, 1, 1);
+                    
+                    // Default behavior for pieces on land or pieces that aren't rats
+                    if (pd.rank !== 1 || !engine.isWater(pd.gridX, pd.gridY)) {
+                        pd.mesh.position.lerp(pd.targetPos, 10 * delta);
+                        // Lerp rotation back to neutral
+                        pd.mesh.rotation.x = THREE.MathUtils.lerp(pd.mesh.rotation.x, 0, delta * 5);
+                        pd.mesh.rotation.z = THREE.MathUtils.lerp(pd.mesh.rotation.z, 0, delta * 5);
+                    } else { // Custom buoyancy for rats on water
+                        const wave = Math.sin(pd.mesh.position.x * 2.5 + time * 2.2) * 0.05 + Math.cos(pd.mesh.position.z * 2.5 + time * 1.8) * 0.05;
+                        const floatingY = 0.25 + wave;
+                        
+                        // Lerp X and Z to the target, but use the wave for Y
+                        const targetPosWithWave = new THREE.Vector3(pd.targetPos.x, floatingY, pd.targetPos.z);
+                        pd.mesh.position.lerp(targetPosWithWave, 4 * delta);
+
+                        // Add bobbing rotation
+                        const targetRotX = Math.cos(time * 1.8 + pd.mesh.position.z * 2) * 0.25;
+                        const targetRotZ = Math.sin(time * 2.2 + pd.mesh.position.x * 2) * 0.25;
+                        pd.mesh.rotation.x = THREE.MathUtils.lerp(pd.mesh.rotation.x, targetRotX, delta * 4);
+                        pd.mesh.rotation.z = THREE.MathUtils.lerp(pd.mesh.rotation.z, targetRotZ, delta * 4);
+                    }
+                }
 
                 if (pd.trapAnimState === 1) {
                     pd.trapTimer -= delta;
