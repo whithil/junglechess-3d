@@ -31,8 +31,8 @@
             color: white;
             text-shadow: 1px 1px 2px black;
         }
-        h1 { margin: 0; font-size: 24px; }
-        #status { font-size: 18px; margin-top: 5px; font-weight: bold; color: #ffeb3b; display: none; }
+        h1 { margin: 0; font-size: 24px; color: #ffeb3b; }
+        #status { font-size: 18px; margin-top: 5px; font-weight: bold; color: #ffffff; display: none; }
         
         #controls {
             padding: 15px;
@@ -68,7 +68,7 @@
 <body>
     <div id="ui-container">
         <div id="header">
-            <h1>Jungle Chess 3D</h1>
+            <h1 id="gameTitle">Jungle Chess 3D</h1>
             <div id="status">Vez do Jogador Verde</div>
         </div>
         <div id="controls"></div>
@@ -113,6 +113,11 @@
             tiltY = THREE.MathUtils.clamp(tiltY, -30, 30);
             targetGyroOffset.x = (tiltX / 30) * 0.6;
             targetGyroOffset.y = (tiltY / 30) * 0.6;
+        }
+
+        // Função utilitária para atualizar o título dinâmico na HUD
+        function updateGameTitle(text) {
+            document.getElementById('gameTitle').innerText = text;
         }
 
         // ==========================================/
@@ -742,6 +747,7 @@
                 gameMode = 'multi';
                 myTeamId = isHost ? 1 : 0; // Host é o Player 1 (Verde), Guest é o 2 (Vermelho)
                 btnRestart.visible = false; // Desativa o restart simples no multiplayer por enquanto
+                updateGameTitle("Multiplayer: Jogador 2 Entrou");
                 switchScene('game');
                 restarting = true;
             });
@@ -761,6 +767,7 @@
                 fallbackCopyTextToClipboard(link);
                 btnInvite.material.map = createTextSprite("Link Copiado!", 50, 512, 128, '#000000', '#ffeb3b').material.map;
                 updateStatusText("Aguardando oponente entrar...");
+                updateGameTitle("Multiplayer: Sala ABERTA");
             });
             peer.on('connection', (conn) => {
                 peerConnection = conn;
@@ -1067,12 +1074,14 @@
             if (action === 'show_local_menu') { switchScene('local_menu'); }
             else if (action === 'start_game_pvp') { 
                 gameMode = 'pvp';
+                updateGameTitle("Local PVP");
                 btnRestart.visible = true;
                 switchScene('game'); 
                 restarting = true; 
             } 
             else if (action === 'start_game_cpu') { 
                 gameMode = 'cpu';
+                updateGameTitle("Local V.S. CPU");
                 btnRestart.visible = true;
                 switchScene('game'); 
                 restarting = true; 
