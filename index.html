@@ -83,8 +83,9 @@
         // ==========================================
         // ESTADOS DO JOGO (STATE MACHINE)
         // ==========================================
-        let currentScene = 'menu'; // 'menu', 'options', 'about', 'game'
+        let currentScene = 'menu'; // 'menu', 'options', 'about', 'game', 'multiplayer'
         let tipsEnabled = true;
+        let restarting = false; // Flag to delay piece initialization on restart
 
         // ==========================================
         // DADOS DO JOGO E REGRAS
@@ -128,7 +129,6 @@
             reset() {
                 this.board = Array(BOARD_COLS).fill(null).map(() => Array(BOARD_ROWS).fill(null));
                 this.pieces = []; 
-                // REGRA: O jogo agora começa pela equipa Verde (1)
                 this.currentTurn = 1; 
                 this.winner = null;
             }
@@ -197,30 +197,19 @@
                 const startY = piece.gridY;
                 const targetPiece = this.getPieceAt(endX, endY);
                 let captured = null;
-
-                // 1. Clear the starting position
                 this.board[startX][startY] = null;
-
-                // 2. Handle capture
                 if (targetPiece) {
                     captured = targetPiece;
                     this.pieces = this.pieces.filter(p => p !== targetPiece);
                 }
-
-                // 3. Update the piece's own coordinates
                 piece.gridX = endX;
                 piece.gridY = endY;
-
-                // 4. Place the piece at the new position on the board
                 this.board[endX][endY] = piece;
-
-                // 5. Check for win condition and switch turns
                 const enemyTeam = piece.team === 0 ? 1 : 0;
                 if (this.isDen(endX, endY, enemyTeam) || this.pieces.filter(p => p.team === enemyTeam).length === 0) {
                     this.winner = piece.team;
                 }
                 this.currentTurn = enemyTeam;
-
                 return captured;
             }
         }
@@ -253,12 +242,10 @@
             filter.type = 'lowpass';
             filter.frequency.setValueAtTime(400, now);
             filter.frequency.exponentialRampToValueAtTime(40, now + 0.5);
-            
             const gain = audioCtx.createGain();
             gain.gain.setValueAtTime(0, now);
             gain.gain.linearRampToValueAtTime(0.8, now + 0.02);
             gain.gain.exponentialRampToValueAtTime(0.01, now + 0.6);
-
             source.connect(filter);
             filter.connect(gain);
             gain.connect(audioCtx.destination);
@@ -273,12 +260,10 @@
             filter.frequency.setValueAtTime(1200, now);
             filter.Q.setValueAtTime(2, now);
             filter.frequency.exponentialRampToValueAtTime(300, now + 1.2);
-            
             const gain = audioCtx.createGain();
             gain.gain.setValueAtTime(0, now);
             gain.gain.linearRampToValueAtTime(0.4, now + 0.05);
             gain.gain.exponentialRampToValueAtTime(0.001, now + 1.2);
-
             source.connect(filter);
             filter.connect(gain);
             gain.connect(audioCtx.destination);
@@ -291,12 +276,10 @@
             const filter = audioCtx.createBiquadFilter();
             filter.type = 'highpass';
             filter.frequency.setValueAtTime(3000, now);
-            
             const gain = audioCtx.createGain();
             gain.gain.setValueAtTime(0, now);
             gain.gain.linearRampToValueAtTime(0.2, now + 0.01);
             gain.gain.exponentialRampToValueAtTime(0.001, now + 1.8);
-
             source.connect(filter);
             filter.connect(gain);
             gain.connect(audioCtx.destination);
@@ -306,7 +289,6 @@
         function playSound(type) {
             if (!audioCtx) return;
             const now = audioCtx.currentTime;
-            
             if (type === 'splash') {
                 const buffer = createNoiseBuffer();
                 playThump(now, buffer);
@@ -314,10 +296,8 @@
                 playSpray(now, buffer);
                 return;
             }
-
             const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
             osc.connect(gain); gain.connect(audioCtx.destination);
-
             if (type === 'jump') {
                 osc.type = 'sine'; osc.frequency.setValueAtTime(250, now); osc.frequency.exponentialRampToValueAtTime(450, now + 0.2);
                 gain.gain.setValueAtTime(0.2, now); gain.gain.linearRampToValueAtTime(0, now + 0.2);
@@ -384,6 +364,7 @@
 
         const controls = new OrbitControls(camera, renderer.domElement);
         controls.target.set(0, 0, 0); controls.update();
+        controls.userData = { target: new THREE.Vector3(0, 0, 0) }; // For animating the target
 
         // ------------------------------------------
         // SISTEMA DE ILUMINAÇÃO SUTIL
@@ -412,27 +393,25 @@
         const menuGroup = new THREE.Group(); gameGroup.add(menuGroup);
         const optionsGroup = new THREE.Group(); gameGroup.add(optionsGroup);
         const aboutGroup = new THREE.Group(); gameGroup.add(aboutGroup);
+        const multiplayerGroup = new THREE.Group(); gameGroup.add(multiplayerGroup);
         
         menuGroup.position.set(0, 2.5, 0);
         optionsGroup.position.set(0, 2.5, 0);
         aboutGroup.position.set(0, 2.5, 0);
+        multiplayerGroup.position.set(0, 2.5, 0);
         
         function createTextSprite(text, fontSize, width, height, color = 'white', bgColor = 'transparent') {
             const canvas = document.createElement('canvas'); canvas.width = width; canvas.height = height;
             const ctx = canvas.getContext('2d');
-            
             if (bgColor !== 'transparent') {
                 ctx.fillStyle = bgColor;
                 if (ctx.roundRect) ctx.roundRect(10, 10, width-20, height-20, 30); else ctx.fillRect(10, 10, width-20, height-20);
-                ctx.fill(); ctx.lineWidth = 6; ctx.strokeStyle = '#ffffff'; ctx.stroke();
+                ctx.fill(); ctx.lineWidth = 6; ctx.strokeStyle = '#000000'; ctx.stroke();
             }
-            
             ctx.fillStyle = color; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
             ctx.font = `bold ${fontSize}px sans-serif`;
-            
             const lines = text.split('\n');
             lines.forEach((line, i) => { ctx.fillText(line, width/2, height/2 + (i - (lines.length-1)/2) * fontSize * 1.2); });
-            
             const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(canvas), depthTest: false }));
             sprite.scale.set(width/256, height/256, 1);
             return { sprite, ctx, canvas, material: sprite.material };
@@ -440,28 +419,37 @@
 
         const titleSprite = createTextSprite("JUNGLE CHESS 3D", 100, 1024, 256, '#ffeb3b').sprite;
         titleSprite.position.y = 1.5; menuGroup.add(titleSprite);
-        const btnSingle = createTextSprite("Jogar (Single-Player)", 50, 512, 128, 'white', '#4CAF50').sprite;
+        const btnSingle = createTextSprite("PVP Local", 50, 512, 128, '#000000', '#6B4226').sprite;
         btnSingle.position.y = 0.5; btnSingle.userData = { isMenuBtn: true, action: 'start_game' }; menuGroup.add(btnSingle);
-        const btnMulti = createTextSprite("Multiplayer", 50, 512, 128, 'white', '#2196F3').sprite;
-        btnMulti.position.y = -0.2; btnMulti.userData = { isMenuBtn: true, action: 'mock_multi' }; menuGroup.add(btnMulti);
-        const btnOptions = createTextSprite("Opções", 50, 512, 128, 'white', '#9C27B0').sprite;
+        const btnMulti = createTextSprite("Multiplayer", 50, 512, 128, '#000000', '#615142').sprite;
+        btnMulti.position.y = -0.2; btnMulti.userData = { isMenuBtn: true, action: 'show_multiplayer' }; menuGroup.add(btnMulti);
+        const btnOptions = createTextSprite("Opções", 50, 512, 128, '#000000', '#6B4226').sprite;
         btnOptions.position.y = -0.9; btnOptions.userData = { isMenuBtn: true, action: 'show_options' }; menuGroup.add(btnOptions);
-        const btnAbout = createTextSprite("Sobre", 50, 512, 128, 'white', '#607D8B').sprite;
-        btnAbout.position.y = -1.6; btnAbout.userData = { isMenuBtn: true, action: 'show_about' }; menuGroup.add(btnAbout);
+        const btnRestart = createTextSprite("Reiniciar", 50, 512, 128, '#000000', '#4F4237').sprite;
+        btnRestart.position.y = -1.6; btnRestart.userData = { isMenuBtn: true, action: 'restart_game' }; btnRestart.visible = false; menuGroup.add(btnRestart);
+        const btnAbout = createTextSprite("Sobre", 50, 512, 128, '#000000', '#615142').sprite;
+        btnAbout.position.y = -2.3; btnAbout.userData = { isMenuBtn: true, action: 'show_about' }; menuGroup.add(btnAbout);
+
+        const multiTitle = createTextSprite("MULTIPLAYER", 80, 512, 128, '#ffeb3b').sprite;
+        multiTitle.position.y = 1.0; multiplayerGroup.add(multiTitle);
+        const btnInvite = createTextSprite("Convidar", 50, 512, 128, '#000000', '#6B4226').sprite;
+        btnInvite.position.y = 0.0; btnInvite.userData = { isMenuBtn: true, action: 'mock_invite' }; multiplayerGroup.add(btnInvite);
+        const btnMultiBack = createTextSprite("Voltar", 50, 512, 128, '#000000', '#4F4237').sprite;
+        btnMultiBack.position.y = -1.0; btnMultiBack.userData = { isMenuBtn: true, action: 'show_menu' }; multiplayerGroup.add(btnMultiBack);
 
         const optTitle = createTextSprite("OPÇÕES", 80, 512, 128, '#ffeb3b').sprite;
         optTitle.position.y = 1.0; optionsGroup.add(optTitle);
-        const btnTipsObj = createTextSprite("Dicas e Ajuda: ON", 50, 512, 128, 'white', '#FF9800');
+        const btnTipsObj = createTextSprite("Dicas e Ajuda: ON", 50, 512, 128, '#000000', '#6B4226');
         const btnTips = btnTipsObj.sprite;
         btnTips.position.y = 0.0; btnTips.userData = { isMenuBtn: true, action: 'toggle_tips' }; optionsGroup.add(btnTips);
-        const btnOptBack = createTextSprite("Voltar", 50, 512, 128, 'white', '#f44336').sprite;
+        const btnOptBack = createTextSprite("Voltar", 50, 512, 128, '#000000', '#4F4237').sprite;
         btnOptBack.position.y = -1.0; btnOptBack.userData = { isMenuBtn: true, action: 'show_menu' }; optionsGroup.add(btnOptBack);
 
         const abtTitle = createTextSprite("SOBRE", 80, 512, 128, '#ffeb3b').sprite;
         abtTitle.position.y = 1.5; aboutGroup.add(abtTitle);
         const abtText = createTextSprite("Jungle Chess 3D\n\nCriado com Three.js / WebXR\nUm clássico 'Dou Shou Qi' nostálgico.", 40, 1024, 512, 'white').sprite;
         abtText.position.y = 0.0; aboutGroup.add(abtText);
-        const btnAbtBack = createTextSprite("Voltar", 50, 512, 128, 'white', '#f44336').sprite;
+        const btnAbtBack = createTextSprite("Voltar", 50, 512, 128, '#000000', '#4F4237').sprite;
         btnAbtBack.position.y = -1.5; btnAbtBack.userData = { isMenuBtn: true, action: 'show_menu' }; aboutGroup.add(btnAbtBack);
 
         function switchScene(newScene) {
@@ -475,9 +463,16 @@
             menuGroup.visible = currentScene === 'menu';
             optionsGroup.visible = currentScene === 'options';
             aboutGroup.visible = currentScene === 'about';
+            multiplayerGroup.visible = currentScene === 'multiplayer';
 
             gameGroup.userData.targetY = targetGameY;
             gameGroup.userData.targetScale = targetGameScale;
+
+            // Animate camera target to keep focus between menu and board
+            const targetControlsY = currentScene === 'game' ? 0 : 0; 
+            if (controls.userData) {
+                controls.userData.target.set(0, targetControlsY, 0);
+            }
         }
 
         // ==========================================
@@ -495,21 +490,15 @@
         }
 
         const menuHudBtn = createHUDButton('☰ MENU', '#9C27B0');
-        const restartBtn = createHUDButton('🔄 REINICIAR', '#f44336');
-        const inviteBtn = createHUDButton('🔗 CONVIDAR', '#FF9800');
 
         function updateHUDPosition() {
             const dist = -2.5; 
             const vFOV = THREE.MathUtils.degToRad(camera.fov);
             const height = 2 * Math.tan(vFOV / 2) * Math.abs(dist);
             const width = height * camera.aspect;
-            
             const rightEdge = (width / 2) - 0.5; 
             const topEdge = (height / 2) - 0.2; 
-            
             menuHudBtn.position.set(rightEdge, topEdge, dist);
-            restartBtn.position.set(rightEdge, topEdge - 0.25, dist);
-            inviteBtn.position.set(rightEdge, topEdge - 0.50, dist);
         }
         updateHUDPosition();
 
@@ -620,20 +609,17 @@
             ctxTop.fillStyle = tData.color; ctxTop.fillRect(0, 0, 256, 256);
             ctxTop.fillStyle = '#fff'; ctxTop.textAlign = 'center'; ctxTop.textBaseline = 'middle'; ctxTop.font = 'bold 160px sans-serif';
             ctxTop.fillText(rank.toString(), 128, 140); ctxTop.strokeStyle = '#000'; ctxTop.lineWidth = 4; ctxTop.strokeText(rank.toString(), 128, 140);
-            
             const cSide = document.createElement('canvas'); cSide.width = 1024; cSide.height = 280; const ctxSide = cSide.getContext('2d');
             ctxSide.fillStyle = tData.color; ctxSide.fillRect(0, 0, 1024, 280);
             ctxSide.fillStyle = '#fff'; ctxSide.textAlign = 'center'; ctxSide.textBaseline = 'middle'; ctxSide.font = 'bold 100px sans-serif';
             ctxSide.fillText(`${data.icon} ${data.name.toUpperCase()} ${data.icon}`, 512, 140);
-            
             const texTop = new THREE.CanvasTexture(cTop); texTop.center.set(0.5, 0.5);
             const texSide = new THREE.CanvasTexture(cSide);
-            
             const matConfig = { roughness: 0.6, metalness: 0.1, clearcoat: 0.3, clearcoatRoughness: 0.8 };
             return [
-                new THREE.MeshPhysicalMaterial({ map: texSide, ...matConfig }), // Lado
-                new THREE.MeshPhysicalMaterial({ map: texTop, ...matConfig }),  // Top
-                new THREE.MeshPhysicalMaterial({ color: tData.color, ...matConfig }) // Fundo
+                new THREE.MeshPhysicalMaterial({ map: texSide, ...matConfig }),
+                new THREE.MeshPhysicalMaterial({ map: texTop, ...matConfig }),
+                new THREE.MeshPhysicalMaterial({ color: tData.color, ...matConfig })
             ];
         }
 
@@ -657,7 +643,6 @@
                 const ctx = canvas.getContext('2d'); ctx.font = '60px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(emoji, 64, 64);
                 const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(canvas), transparent: true, opacity: 1 }));
                 sprite.position.copy(pos); sprite.position.y = 1.0; 
-                
                 const angle = Math.random() * Math.PI * 2, speed = 1 + Math.random() * 3, velY = 3 + Math.random() * 5;
                 gameGroup.add(sprite);
                 activeParticles.push({ mesh: sprite, vx: Math.cos(angle) * speed, vy: velY, vz: Math.sin(angle) * speed, life: 1.0 });
@@ -775,23 +760,37 @@
             playSound('beep-up');
             obj.scale.y *= 0.7; setTimeout(() => obj.scale.y /= 0.7, 150);
             const action = obj.userData.action;
-            if (action === 'start_game') { initPieces(); switchScene('game'); } 
+            if (action === 'start_game') { 
+                btnRestart.visible = true;
+                switchScene('game'); 
+                restarting = true; // Defer piece creation until after transition
+            } 
+            else if (action === 'restart_game') {
+                switchScene('game');
+                if (selectedPiece) { // Clear selection before transition
+                    selectedPiece.targetPos.y = 0.4;
+                    selectedPiece = null;
+                }
+                clearHighlights();
+                restarting = true; // Defer piece creation
+            }
             else if (action === 'show_options') { switchScene('options'); } 
             else if (action === 'show_about') { switchScene('about'); } 
             else if (action === 'show_menu') { switchScene('menu'); } 
+            else if (action === 'show_multiplayer') { switchScene('multiplayer'); }
             else if (action === 'toggle_tips') {
                 tipsEnabled = !tipsEnabled;
                 const newText = tipsEnabled ? "Dicas e Ajuda: ON" : "Dicas e Ajuda: OFF";
-                const bgColor = tipsEnabled ? "#FF9800" : "#757575";
+                const bgColor = tipsEnabled ? "#6B4226" : "#4F4237";
                 const { canvas, ctx } = btnTipsObj;
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
                 ctx.fillStyle = bgColor;
                 if (ctx.roundRect) ctx.roundRect(10, 10, canvas.width-20, canvas.height-20, 30); else ctx.fillRect(10, 10, canvas.width-20, canvas.height-20);
-                ctx.fill(); ctx.lineWidth = 6; ctx.strokeStyle = '#ffffff'; ctx.stroke();
-                ctx.fillStyle = 'white'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                ctx.fill(); ctx.lineWidth = 6; ctx.strokeStyle = '#000000'; ctx.stroke();
+                ctx.fillStyle = '#000000'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
                 ctx.font = 'bold 50px sans-serif'; ctx.fillText(newText, canvas.width/2, canvas.height/2);
                 btnTipsObj.material.map.needsUpdate = true;
-            } else if (action === 'mock_multi') {
+            } else if (action === 'mock_invite') {
                 const mat = obj.material; mat.color.setHex(0x555555); setTimeout(() => mat.color.setHex(0xffffff), 1000);
             }
         }
@@ -802,12 +801,8 @@
             if (obj.userData.isHUDButton) {
                 playSound('beep-up');
                 obj.scale.set(0.7, 0.15, 1); setTimeout(() => obj.scale.set(0.8, 0.2, 1), 150);
-                if (obj.userData.action === '☰ MENU') { switchScene('menu'); } 
-                else if (obj.userData.action === '🔄 REINICIAR') { initPieces(); selectedPiece = null; clearHighlights(); } 
-                else {
-                    const statusEl = document.getElementById('status');
-                    statusEl.textContent = "⚙️ Em Breve..."; statusEl.style.color = "#FF9800";
-                    setTimeout(() => updateStatusUI(), 1500);
+                if (obj.userData.action === '☰ MENU') { 
+                    switchScene('menu'); 
                 }
                 return;
             }
@@ -860,7 +855,7 @@
             initAudio(); 
             if (renderer.xr.isPresenting || event.target.tagName === 'BUTTON') return;
             if (event.touches && event.touches.length > 1) {
-                return; // Managed by touch zoom handlers
+                return;
             }
             if (event.changedTouches) {
                 mouse.x = (event.changedTouches[0].clientX / window.innerWidth) * 2 - 1;
@@ -874,6 +869,7 @@
             if (currentScene === 'menu') intersectables = menuGroup.children;
             else if (currentScene === 'options') intersectables = optionsGroup.children;
             else if (currentScene === 'about') intersectables = aboutGroup.children;
+            else if (currentScene === 'multiplayer') intersectables = multiplayerGroup.children;
             else if (currentScene === 'game') intersectables = [...gameGroup.children, ...hudGroup.children];
             const intersects = raycaster.intersectObjects(intersectables, true)
                 .filter(hit => {
@@ -886,7 +882,6 @@
         }
         window.addEventListener('pointerdown', onPointerDown);
 
-        // Pinch-to-zoom logic for touch devices
         let isPinching = false;
         let initialPinchDistance = 0;
         const initialGameScale = new THREE.Vector3();
@@ -910,7 +905,6 @@
                 const currentPinchDistance = Math.hypot(t1.pageX - t2.pageX, t1.pageY - t2.pageY);
                 const scaleFactor = currentPinchDistance / initialPinchDistance;
                 const newScale = initialGameScale.clone().multiplyScalar(scaleFactor);
-                // Clamp the scale to reasonable values
                 newScale.clampScalar(0.1, 2.0);
                 gameGroup.scale.copy(newScale);
             }
@@ -919,7 +913,6 @@
         function onTouchEnd(event) {
             if (isPinching) {
                 isPinching = false;
-                // Persist the zoom level after pinching
                 gameGroup.userData.targetScale = gameGroup.scale.x;
             }
         }
@@ -927,7 +920,6 @@
         window.addEventListener('touchstart', onTouchStart, { passive: false });
         window.addEventListener('touchmove', onTouchMove, { passive: false });
         window.addEventListener('touchend', onTouchEnd);
-
 
         let hitTestSource = null, hitTestSourceRequested = false, reticle, isARPlaced = false, isARSession = false;
         reticle = new THREE.Mesh(new THREE.RingGeometry(0.15, 0.2, 32).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xffffff }));
@@ -942,7 +934,6 @@
         const line = new THREE.Line(geometry, new THREE.LineBasicMaterial({ color: 0xffffff })); line.name = 'line'; line.scale.z = 5;
         controller1.add(line.clone()); controller2.add(line.clone());
 
-        // VR controller zoom logic
         let controller1Selected = false, controller2Selected = false, isZoomingVR = false;
         let initialControllerDist = 0;
         const initialGameScaleVR = new THREE.Vector3();
@@ -951,7 +942,6 @@
         controller1.addEventListener('selectend', () => {
             controller1Selected = false;
             if (isZoomingVR) {
-                // Persist the zoom level after VR zoom
                 gameGroup.userData.targetScale = gameGroup.scale.x;
             }
             isZoomingVR = false;
@@ -960,21 +950,18 @@
         controller2.addEventListener('selectend', () => {
             controller2Selected = false;
             if (isZoomingVR) {
-                // Persist the zoom level after VR zoom
                 gameGroup.userData.targetScale = gameGroup.scale.x;
             }
             isZoomingVR = false;
         });
 
-
         function onSelectXR(event) {
             initAudio(); const controller = event.target;
-            if (controller1Selected && controller2Selected) return; // Don't interact if zooming
-
+            if (controller1Selected && controller2Selected) return;
             if (isARSession && !isARPlaced) {
                 if (reticle.visible) {
                     const arPos = new THREE.Vector3().setFromMatrixPosition(reticle.matrix);
-                    arPos.y -= 0.2; // Lower the board slightly
+                    arPos.y -= 0.2;
                     gameGroup.position.copy(arPos);
                     gameGroup.scale.set(0.3, 0.3, 0.3);
                     isARPlaced = true; reticle.visible = false; document.getElementById('ar-overlay').style.display = 'none';
@@ -987,6 +974,7 @@
             if (currentScene === 'menu') intersectables = menuGroup.children;
             else if (currentScene === 'options') intersectables = optionsGroup.children;
             else if (currentScene === 'about') intersectables = aboutGroup.children;
+            else if (currentScene === 'multiplayer') intersectables = multiplayerGroup.children;
             else if (currentScene === 'game') intersectables = [...gameGroup.children, ...hudGroup.children];
             const intersects = raycaster.intersectObjects(intersectables, true)
                 .filter(hit => {
@@ -1028,8 +1016,17 @@
 
         function render(timestamp, frame) {
             const delta = clock.getDelta(); const time = clock.getElapsedTime();
+
+            if (restarting) {
+                const isTransitionDone = Math.abs(gameGroup.scale.y - gameGroup.userData.targetScale) < 0.001;
+                if (isTransitionDone) {
+                    initPieces();
+                    selectedPiece = null;
+                    clearHighlights();
+                    restarting = false;
+                }
+            }
             
-            // Handle VR zoom
             if (controller1Selected && controller2Selected) {
                 if (!isZoomingVR) {
                     isZoomingVR = true;
@@ -1037,18 +1034,21 @@
                     initialGameScaleVR.copy(gameGroup.scale);
                 }
                 const currentDist = grip1.position.distanceTo(grip2.position);
-                if (initialControllerDist > 0.01) { // Avoid division by zero
+                if (initialControllerDist > 0.01) {
                     const scaleFactor = currentDist / initialControllerDist;
                     const newScale = initialGameScaleVR.clone().multiplyScalar(scaleFactor);
-                    newScale.clampScalar(0.1, 2.0); // Clamp scale
+                    newScale.clampScalar(0.1, 2.0);
                     gameGroup.scale.copy(newScale);
                 }
             } else {
                 isZoomingVR = false;
             }
 
+            if(controls.userData) {
+                controls.target.lerp(controls.userData.target, 4 * delta);
+            }
 
-            if (!isPinching && !isZoomingVR) { // Only lerp scale if not actively zooming
+            if (!isPinching && !isZoomingVR) {
                 const s = THREE.MathUtils.lerp(gameGroup.scale.y, gameGroup.userData.targetScale, 4 * delta);
                 if (Math.abs(s - gameGroup.userData.targetScale) > 0.001) {
                     gameGroup.scale.set(s,s,s);
@@ -1056,7 +1056,6 @@
             }
             gameGroup.position.y = THREE.MathUtils.lerp(gameGroup.position.y, gameGroup.userData.targetY, 4 * delta);
             
-
             const targetRedLight = engine.currentTurn === 0 ? 6.0 : 1.8;
             const targetGreenLight = engine.currentTurn === 1 ? 6.0 : 1.8;
             lightRedSide.intensity = THREE.MathUtils.lerp(lightRedSide.intensity, targetRedLight, delta * 4);
@@ -1095,7 +1094,7 @@
             const snapAngle = Math.round(camAngle / (Math.PI / 2)) * (Math.PI / 2);
             trapTextMat.map.rotation = snapAngle;
             
-            [menuGroup, optionsGroup, aboutGroup].forEach(grp => {
+            [menuGroup, optionsGroup, aboutGroup, multiplayerGroup].forEach(grp => {
                 if(grp.visible) { grp.lookAt(camera.position); grp.position.y = 2.5 + Math.sin(time * 2) * 0.1; }
             });
 
@@ -1128,29 +1127,21 @@
                         pd.mesh.visible = false;
                         pd.isDying = false;
                         pd.isDead = true;
-                        // PHANTOM PIECE FIX: If the board still has a reference to this dead piece, remove it.
                         if (engine.getPieceAt(pd.gridX, pd.gridY) === pd) {
                             engine.board[pd.gridX][pd.gridY] = null;
                         }
                     }
-                } else { // This block handles pieces at rest (not moving, squashing, or dying)
+                } else { 
                     pd.mesh.scale.set(1, 1, 1);
-                    
-                    // Default behavior for pieces on land or pieces that aren't rats
                     if (pd.rank !== 1 || !engine.isWater(pd.gridX, pd.gridY)) {
                         pd.mesh.position.lerp(pd.targetPos, 10 * delta);
-                        // Lerp rotation back to neutral
                         pd.mesh.rotation.x = THREE.MathUtils.lerp(pd.mesh.rotation.x, 0, delta * 5);
                         pd.mesh.rotation.z = THREE.MathUtils.lerp(pd.mesh.rotation.z, 0, delta * 5);
-                    } else { // Custom buoyancy for rats on water
+                    } else { 
                         const wave = Math.sin(pd.mesh.position.x * 2.5 + time * 2.2) * 0.05 + Math.cos(pd.mesh.position.z * 2.5 + time * 1.8) * 0.05;
                         const floatingY = 0.25 + wave;
-                        
-                        // Lerp X and Z to the target, but use the wave for Y
                         const targetPosWithWave = new THREE.Vector3(pd.targetPos.x, floatingY, pd.targetPos.z);
                         pd.mesh.position.lerp(targetPosWithWave, 4 * delta);
-
-                        // Add bobbing rotation
                         const targetRotX = Math.cos(time * 1.8 + pd.mesh.position.z * 2) * 0.25;
                         const targetRotZ = Math.sin(time * 2.2 + pd.mesh.position.x * 2) * 0.25;
                         pd.mesh.rotation.x = THREE.MathUtils.lerp(pd.mesh.rotation.x, targetRotX, delta * 4);
