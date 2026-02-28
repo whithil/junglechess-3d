@@ -193,18 +193,34 @@
             }
 
             executeMove(piece, endX, endY) {
+                const startX = piece.gridX;
+                const startY = piece.gridY;
                 const targetPiece = this.getPieceAt(endX, endY);
                 let captured = null;
-                if (targetPiece) { captured = targetPiece; this.pieces = this.pieces.filter(p => p !== targetPiece); }
-                this.board[piece.gridX][piece.gridY] = null;
-                piece.gridX = endX; piece.gridY = endY;
+
+                // 1. Clear the starting position
+                this.board[startX][startY] = null;
+
+                // 2. Handle capture
+                if (targetPiece) {
+                    captured = targetPiece;
+                    this.pieces = this.pieces.filter(p => p !== targetPiece);
+                }
+
+                // 3. Update the piece's own coordinates
+                piece.gridX = endX;
+                piece.gridY = endY;
+
+                // 4. Place the piece at the new position on the board
                 this.board[endX][endY] = piece;
 
+                // 5. Check for win condition and switch turns
                 const enemyTeam = piece.team === 0 ? 1 : 0;
                 if (this.isDen(endX, endY, enemyTeam) || this.pieces.filter(p => p.team === enemyTeam).length === 0) {
                     this.winner = piece.team;
                 }
                 this.currentTurn = enemyTeam;
+
                 return captured;
             }
         }
@@ -761,7 +777,7 @@
             const intersects = raycaster.intersectObjects(intersectables, true)
                 .filter(hit => {
                     const ud = hit.object.userData; if (!ud) return false;
-                    if (currentScene === 'game') return ud.isPiece || ud.isTile || ud.isHUDButton;
+                    if (currentScene === 'game') return (ud.isPiece && ud.pieceData && !ud.pieceData.isDead) || ud.isTile || ud.isHUDButton;
                     else return ud.isMenuBtn;
                 });
             if (intersects.length > 0) handleInteraction(intersects[0]);
@@ -801,7 +817,7 @@
             const intersects = raycaster.intersectObjects(intersectables, true)
                 .filter(hit => {
                     const ud = hit.object.userData; if (!ud) return false;
-                    if (currentScene === 'game') return ud.isPiece || ud.isTile || ud.isHUDButton;
+                    if (currentScene === 'game') return (ud.isPiece && ud.pieceData && !ud.pieceData.isDead) || ud.isTile || ud.isHUDButton;
                     else return ud.isMenuBtn;
                 });
             if (intersects.length > 0) handleInteraction(intersects[0]);
@@ -908,7 +924,15 @@
                     pd.mesh.scale.y = THREE.MathUtils.lerp(pd.mesh.scale.y, 0.05, 15 * delta);
                     pd.mesh.scale.x = THREE.MathUtils.lerp(pd.mesh.scale.x, 2.0, 15 * delta);
                     pd.mesh.scale.z = THREE.MathUtils.lerp(pd.mesh.scale.z, 2.0, 15 * delta);
-                    if (pd.mesh.scale.y < 0.08) { pd.mesh.visible = false; pd.isDying = false; pd.isDead = true; }
+                    if (pd.mesh.scale.y < 0.08) {
+                        pd.mesh.visible = false;
+                        pd.isDying = false;
+                        pd.isDead = true;
+                        // PHANTOM PIECE FIX: If the board still has a reference to this dead piece, remove it.
+                        if (engine.getPieceAt(pd.gridX, pd.gridY) === pd) {
+                            engine.board[pd.gridX][pd.gridY] = null;
+                        }
+                    }
                 } else { // This block handles pieces at rest (not moving, squashing, or dying)
                     pd.mesh.scale.set(1, 1, 1);
                     
