@@ -53,6 +53,8 @@
             display: none;
         }
     </style>
+    <!-- PeerJS para Multiplayer WebRTC P2P descentralizado -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.2/peerjs.min.js"></script>
     <!-- Import Maps para Three.js -->
     <script type="importmap">
         {
@@ -83,12 +85,35 @@
         import { TextGeometry } from 'three/addons/geometries/TextGeometry.js';
 
         // ==========================================/
-        // ESTADOS DO JOGO (STATE MACHINE)
+        // ESTADOS DO JOGO (STATE MACHINE & MULTIPLAYER)
         // ==========================================/
-        let currentScene = 'menu'; // 'menu', 'options', 'about', 'game', 'multiplayer'
+        let currentScene = 'menu'; // 'menu', 'local_menu', 'options', 'about', 'game', 'multiplayer'
         let tipsEnabled = true;
-        let restarting = false; // Flag to delay piece initialization on restart
-        let isTransitioningCamera = false; // Controle de zoom e enquadramento de câmera
+        let restarting = false; 
+        let isTransitioningCamera = false; 
+        
+        let gameMode = 'pvp'; // 'pvp', 'cpu', 'multi'
+        let myTeamId = 1; // 1 = Verde (Base), 0 = Vermelho. No PVP local jogamos por ambos.
+        
+        // Conexão P2P
+        let peer = null;
+        let peerConnection = null;
+        let isHost = true;
+
+        // Variáveis para paralaxe com Giroscópio
+        let gyroInitialized = false;
+        const targetGyroOffset = new THREE.Vector2(0, 0);
+        const currentGyroOffset = new THREE.Vector2(0, 0);
+
+        function handleOrientation(e) {
+            if (!e.beta || !e.gamma) return;
+            let tiltX = e.gamma; 
+            let tiltY = e.beta - 45; 
+            tiltX = THREE.MathUtils.clamp(tiltX, -30, 30);
+            tiltY = THREE.MathUtils.clamp(tiltY, -30, 30);
+            targetGyroOffset.x = (tiltX / 30) * 0.6;
+            targetGyroOffset.y = (tiltY / 30) * 0.6;
+        }
 
         // ==========================================/
         // DADOS DO Jogo E REGRAS
@@ -104,7 +129,6 @@
         };
 
         const TEAMS = {
-            // Cores ajustadas para serem menos pastel e ~15-20% mais saturadas
             0: { color: '#E52222', name: "Vermelho" }, 
             1: { color: '#25A02B', name: "Verde" }
         };
@@ -355,9 +379,8 @@
           });
         const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
         
-        // FIX: Mais zoom inicial (aproximado no eixo Y e Z)
         camera.position.set(0, 7, 8);
-        camera.userData = { targetPos: new THREE.Vector3(0, 7, 8) }; // Controla os enquadramentos dinâmicos
+        camera.userData = { targetPos: new THREE.Vector3(0, 7, 8) }; 
         scene.add(camera); 
 
         const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -505,11 +528,9 @@
             canvas.width = 512; canvas.height = 512;
             const ctx = canvas.getContext('2d');
             
-            // Fundo madeira clara alaranjada
             ctx.fillStyle = '#E69545'; 
             ctx.fillRect(0, 0, 512, 512);
             
-            // Fibras da madeira bem sutis
             ctx.strokeStyle = '#CC7A33';
             ctx.lineWidth = 5;
             for (let i = 0; i < 20; i++) {
@@ -519,30 +540,21 @@
                 ctx.stroke();
             }
             
-            // Borda de madeira escura marrom
             ctx.strokeStyle = '#4A2E15';
             ctx.lineWidth = 40; 
             ctx.strokeRect(0, 0, 512, 512);
             
-            // Sombra interna
             ctx.strokeStyle = 'rgba(0,0,0,0.4)';
             ctx.lineWidth = 10;
             ctx.strokeRect(20, 20, 472, 472);
 
-            const faceMat = new THREE.MeshStandardMaterial({ 
-                map: new THREE.CanvasTexture(canvas), 
-                roughness: 0.9 
-            });
-            const edgeMat = new THREE.MeshStandardMaterial({ 
-                color: '#4A2E15', 
-                roughness: 0.9 
-            });
+            const faceMat = new THREE.MeshStandardMaterial({ map: new THREE.CanvasTexture(canvas), roughness: 0.9 });
+            const edgeMat = new THREE.MeshStandardMaterial({ color: '#4A2E15', roughness: 0.9 });
 
             const geo = new THREE.BoxGeometry(width, height, 0.1);
             const materials = [edgeMat, edgeMat, edgeMat, edgeMat, faceMat, faceMat];
             const mesh = new THREE.Mesh(geo, materials);
             
-            // Posiciona um pouco atrás dos botões para servir de fundo
             mesh.position.set(0, posY, -0.15); 
             return mesh;
         }
@@ -551,11 +563,13 @@
         // SISTEMA DE CENAS E UI 3D (MENUS)
         // ==========================================/
         const menuGroup = new THREE.Group(); gameGroup.add(menuGroup);
+        const localMenuGroup = new THREE.Group(); gameGroup.add(localMenuGroup);
         const optionsGroup = new THREE.Group(); gameGroup.add(optionsGroup);
         const aboutGroup = new THREE.Group(); gameGroup.add(aboutGroup);
         const multiplayerGroup = new THREE.Group(); gameGroup.add(multiplayerGroup);
         
         menuGroup.position.set(0, 2.5, 0);
+        localMenuGroup.position.set(0, 2.5, 0);
         optionsGroup.position.set(0, 2.5, 0);
         aboutGroup.position.set(0, 2.5, 0);
         multiplayerGroup.position.set(0, 2.5, 0);
@@ -580,45 +594,28 @@
         function createCloseButton(width, height, posY) {
             const { sprite } = createTextSprite("X", 60, 128, 128, 'white', '#D32F2F');
             sprite.scale.set(0.5, 0.5, 1);
-            // Puxa o botão sutilmente para dentro (-0.15) para não ficar exageradamente para fora
             sprite.position.set(width / 2 - 0.15, posY + height / 2 - 0.15, 0.0);
             sprite.userData = { isMenuBtn: true, action: 'resume_game' };
             return sprite;
         }
 
-        // Adicionando os painéis de madeira emoldurando os menus
+        // --- Paineis Principais ---
         menuGroup.add(createMenuPanel(3.0, 4.0, -0.9));
+        localMenuGroup.add(createMenuPanel(3.0, 3.5, 0.0));
         optionsGroup.add(createMenuPanel(3.0, 3.5, 0.0));
         aboutGroup.add(createMenuPanel(4.5, 4.2, 0.0));
-        multiplayerGroup.add(createMenuPanel(3.0, 3.5, 0.0));
+        multiplayerGroup.add(createMenuPanel(3.5, 4.0, 0.0));
 
-        // Adicionando botão 'X' aos menus para retomar o jogo
         menuGroup.add(createCloseButton(3.0, 4.0, -0.9));
+        localMenuGroup.add(createCloseButton(3.0, 3.5, 0.0));
         optionsGroup.add(createCloseButton(3.0, 3.5, 0.0));
         aboutGroup.add(createCloseButton(4.5, 4.2, 0.0));
-        multiplayerGroup.add(createCloseButton(3.0, 3.5, 0.0));
+        multiplayerGroup.add(createCloseButton(3.5, 4.0, 0.0));
 
         // --- TÍTULO 3D (JUNGLE CHESS 3D) ---
         const titleGroup = new THREE.Group();
-        // Título baixado para colar perfeitamente na caixa de madeira
         titleGroup.position.y = 2.2; 
         menuGroup.add(titleGroup);
-
-        function createWoodTexture() {
-            const canvas = document.createElement('canvas'); canvas.width = 256; canvas.height = 256;
-            const ctx = canvas.getContext('2d');
-            ctx.fillStyle = '#8B5A2B'; ctx.fillRect(0, 0, 256, 256);
-            ctx.strokeStyle = '#5C3A21'; ctx.lineWidth = 4;
-            for (let i = 0; i < 15; i++) {
-                ctx.beginPath();
-                ctx.moveTo(0, Math.random() * 256);
-                ctx.bezierCurveTo(85, Math.random() * 256, 170, Math.random() * 256, 256, Math.random() * 256);
-                ctx.stroke();
-            }
-            const tex = new THREE.CanvasTexture(canvas);
-            tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-            return tex;
-        }
 
         function createStoneTexture() {
             const canvas = document.createElement('canvas'); canvas.width = 256; canvas.height = 256;
@@ -637,33 +634,23 @@
 
         const fontLoader = new FontLoader();
         fontLoader.load('https://cdn.jsdelivr.net/npm/three@0.160.0/examples/fonts/helvetiker_bold.typeface.json', (font) => {
-            const woodMat = new THREE.MeshStandardMaterial({ map: createWoodTexture(), roughness: 0.9 });
+            const yellowMat = new THREE.MeshStandardMaterial({ color: 0xffeb3b, roughness: 0.4, metalness: 0.2 });
             const stoneMat = new THREE.MeshStandardMaterial({ map: createStoneTexture(), roughness: 0.9, metalness: 0.1 });
 
-            const jcGeo = new TextGeometry('JUNGLE CHESS', {
-                font: font, size: 0.5, height: 0.15, curveSegments: 4,
-                bevelEnabled: true, bevelThickness: 0.02, bevelSize: 0.02, bevelSegments: 3
-            });
-            jcGeo.computeBoundingBox();
-            jcGeo.translate(-0.5 * (jcGeo.boundingBox.max.x - jcGeo.boundingBox.min.x), 0, 0);
-            const jcMesh = new THREE.Mesh(jcGeo, woodMat);
-            jcMesh.position.y = 0.4;
+            const jcGeo = new TextGeometry('JUNGLE CHESS', { font: font, size: 0.5, height: 0.15, curveSegments: 4, bevelEnabled: true, bevelThickness: 0.02, bevelSize: 0.02, bevelSegments: 3 });
+            jcGeo.computeBoundingBox(); jcGeo.translate(-0.5 * (jcGeo.boundingBox.max.x - jcGeo.boundingBox.min.x), 0, 0);
+            const jcMesh = new THREE.Mesh(jcGeo, yellowMat); jcMesh.position.y = 0.4;
             
-            const tdGeo = new TextGeometry('3D', {
-                font: font, size: 0.9, height: 0.3, curveSegments: 4,
-                bevelEnabled: true, bevelThickness: 0.04, bevelSize: 0.04, bevelSegments: 3
-            });
-            tdGeo.computeBoundingBox();
-            tdGeo.translate(-0.5 * (tdGeo.boundingBox.max.x - tdGeo.boundingBox.min.x), 0, 0);
-            const tdMesh = new THREE.Mesh(tdGeo, stoneMat);
-            tdMesh.position.y = -0.6;
+            const tdGeo = new TextGeometry('3D', { font: font, size: 0.9, height: 0.3, curveSegments: 4, bevelEnabled: true, bevelThickness: 0.04, bevelSize: 0.04, bevelSegments: 3 });
+            tdGeo.computeBoundingBox(); tdGeo.translate(-0.5 * (tdGeo.boundingBox.max.x - tdGeo.boundingBox.min.x), 0, 0);
+            const tdMesh = new THREE.Mesh(tdGeo, stoneMat); tdMesh.position.y = -0.6;
 
-            titleGroup.add(jcMesh);
-            titleGroup.add(tdMesh);
+            titleGroup.add(jcMesh); titleGroup.add(tdMesh);
         });
 
-        const btnSingle = createTextSprite("PVP Local", 50, 512, 128, '#000000', '#6B4226').sprite;
-        btnSingle.position.y = 0.5; btnSingle.userData = { isMenuBtn: true, action: 'start_game' }; menuGroup.add(btnSingle);
+        // --- MENU PRINCIPAL ---
+        const btnLocalMenu = createTextSprite("Jogo Local", 50, 512, 128, '#000000', '#6B4226').sprite;
+        btnLocalMenu.position.y = 0.5; btnLocalMenu.userData = { isMenuBtn: true, action: 'show_local_menu' }; menuGroup.add(btnLocalMenu);
         const btnMulti = createTextSprite("Multiplayer", 50, 512, 128, '#000000', '#615142').sprite;
         btnMulti.position.y = -0.2; btnMulti.userData = { isMenuBtn: true, action: 'show_multiplayer' }; menuGroup.add(btnMulti);
         const btnOptions = createTextSprite("Opções", 50, 512, 128, '#000000', '#6B4226').sprite;
@@ -673,13 +660,25 @@
         const btnAbout = createTextSprite("Sobre", 50, 512, 128, '#000000', '#615142').sprite;
         btnAbout.position.y = -2.3; btnAbout.userData = { isMenuBtn: true, action: 'show_about' }; menuGroup.add(btnAbout);
 
+        // --- SUBMENU: JOGO LOCAL ---
+        const localTitle = createTextSprite("JOGO LOCAL", 80, 512, 128, '#ffeb3b').sprite;
+        localTitle.position.y = 1.0; localMenuGroup.add(localTitle);
+        const btnSingle = createTextSprite("PVP Local", 50, 512, 128, '#000000', '#6B4226').sprite;
+        btnSingle.position.y = 0.0; btnSingle.userData = { isMenuBtn: true, action: 'start_game_pvp' }; localMenuGroup.add(btnSingle);
+        const btnCPU = createTextSprite("V.S. CPU", 50, 512, 128, '#000000', '#615142').sprite;
+        btnCPU.position.y = -1.0; btnCPU.userData = { isMenuBtn: true, action: 'start_game_cpu' }; localMenuGroup.add(btnCPU);
+
+        // --- SUBMENU: MULTIPLAYER (P2P DApp) ---
         const multiTitle = createTextSprite("MULTIPLAYER", 80, 512, 128, '#ffeb3b').sprite;
         multiTitle.position.y = 1.0; multiplayerGroup.add(multiTitle);
-        const btnInvite = createTextSprite("Convidar", 50, 512, 128, '#000000', '#6B4226').sprite;
-        btnInvite.position.y = 0.0; btnInvite.userData = { isMenuBtn: true, action: 'mock_invite' }; multiplayerGroup.add(btnInvite);
+        const btnInvite = createTextSprite("Gerar Link", 50, 512, 128, '#000000', '#6B4226').sprite;
+        btnInvite.position.y = 0.0; btnInvite.userData = { isMenuBtn: true, action: 'generate_link' }; multiplayerGroup.add(btnInvite);
+        const multiStatusText = createTextSprite("Compartilhe a URL", 30, 512, 128, 'white').sprite;
+        multiStatusText.position.y = -0.8; multiplayerGroup.add(multiStatusText);
         const btnMultiBack = createTextSprite("Voltar", 50, 512, 128, '#000000', '#4F4237').sprite;
-        btnMultiBack.position.y = -1.0; btnMultiBack.userData = { isMenuBtn: true, action: 'show_menu' }; multiplayerGroup.add(btnMultiBack);
+        btnMultiBack.position.y = -1.5; btnMultiBack.userData = { isMenuBtn: true, action: 'show_menu' }; multiplayerGroup.add(btnMultiBack);
 
+        // --- SUBMENU: OPÇÕES ---
         const optTitle = createTextSprite("OPÇÕES", 80, 512, 128, '#ffeb3b').sprite;
         optTitle.position.y = 1.0; optionsGroup.add(optTitle);
         const btnTipsObj = createTextSprite("Dicas e Ajuda: ON", 50, 512, 128, '#000000', '#6B4226');
@@ -688,6 +687,7 @@
         const btnOptBack = createTextSprite("Voltar", 50, 512, 128, '#000000', '#4F4237').sprite;
         btnOptBack.position.y = -1.0; btnOptBack.userData = { isMenuBtn: true, action: 'show_menu' }; optionsGroup.add(btnOptBack);
 
+        // --- SUBMENU: SOBRE ---
         const abtTitle = createTextSprite("SOBRE", 80, 512, 128, '#ffeb3b').sprite;
         abtTitle.position.y = 1.5; aboutGroup.add(abtTitle);
         const abtText = createTextSprite("Jungle Chess 3D\n\nCriado com Three.js / WebXR\nUm clássico 'Dou Shou Qi' nostálgico.\n\nRe-imaginado para 3d moderno por Whithil", 40, 1024, 640, 'white').sprite;
@@ -703,26 +703,91 @@
             hudGroup.visible = currentScene === 'game';
 
             menuGroup.visible = currentScene === 'menu';
+            localMenuGroup.visible = currentScene === 'local_menu';
             optionsGroup.visible = currentScene === 'options';
             aboutGroup.visible = currentScene === 'about';
             multiplayerGroup.visible = currentScene === 'multiplayer';
 
             gameGroup.userData.targetY = targetGameY;
 
-            // FIX: Reduzido de 1.5 para 0.8 para um enquadramento mais elegante e equilibrado
             const targetControlsY = currentScene === 'game' ? 0 : 0.8; 
-            if (controls.userData) {
-                controls.userData.target.set(0, targetControlsY, 0);
-            }
+            if (controls.userData) { controls.userData.target.set(0, targetControlsY, 0); }
 
-            // Inicia o deslocamento e zoom da câmera para o tabuleiro ou para o menu
             if (currentScene === 'game') {
-                camera.userData.targetPos.set(0, 6, 6.5); // Ligeiramente mais próximo durante o jogo também
+                camera.userData.targetPos.set(0, 6, 6.5); 
             } else {
-                camera.userData.targetPos.set(0, 7, 8); // Mais zoom no menu
+                camera.userData.targetPos.set(0, 7, 8); 
             }
             isTransitioningCamera = true;
         }
+
+        // ==========================================/
+        // P2P DAPP MULTIPLAYER LOGIC (PeerJS)
+        // ==========================================/
+        function updateStatusText(text) {
+            multiStatusText.material.map = createTextSprite(text, 30, 512, 128, 'white').material.map;
+        }
+
+        function fallbackCopyTextToClipboard(text) {
+            var textArea = document.createElement("textarea");
+            textArea.value = text;
+            textArea.style.top = "0"; textArea.style.left = "0"; textArea.style.position = "fixed";
+            document.body.appendChild(textArea); textArea.focus(); textArea.select();
+            try { document.execCommand('copy'); } catch (err) { console.error('Falha ao copiar', err); }
+            document.body.removeChild(textArea);
+        }
+
+        function setupP2PConnection() {
+            peerConnection.on('open', () => {
+                gameMode = 'multi';
+                myTeamId = isHost ? 1 : 0; // Host é o Player 1 (Verde), Guest é o 2 (Vermelho)
+                btnRestart.visible = false; // Desativa o restart simples no multiplayer por enquanto
+                switchScene('game');
+                restarting = true;
+            });
+            peerConnection.on('data', (data) => {
+                if (data.type === 'move') {
+                    executeRemoteMove(data.startX, data.startY, data.endX, data.endY);
+                }
+            });
+        }
+
+        function initP2PHost() {
+            if (peer) return;
+            const roomCode = Math.random().toString(36).substring(2, 8);
+            peer = new Peer(roomCode);
+            peer.on('open', (id) => {
+                const link = window.location.href.split('?')[0] + '?room=' + id;
+                fallbackCopyTextToClipboard(link);
+                btnInvite.material.map = createTextSprite("Link Copiado!", 50, 512, 128, '#000000', '#ffeb3b').material.map;
+                updateStatusText("Aguardando oponente entrar...");
+            });
+            peer.on('connection', (conn) => {
+                peerConnection = conn;
+                setupP2PConnection();
+            });
+        }
+
+        function initP2PGuest(roomId) {
+            peer = new Peer();
+            peer.on('open', () => {
+                updateStatusText("Conectando ao Host...");
+                peerConnection = peer.connect(roomId);
+                setupP2PConnection();
+            });
+        }
+
+        // Verifica a URL na inicialização para ver se é Guest
+        window.addEventListener('load', () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const joinRoom = urlParams.get('room');
+            if (joinRoom) {
+                isHost = false;
+                switchScene('multiplayer');
+                btnInvite.visible = false; 
+                initP2PGuest(joinRoom);
+            }
+        });
 
         // ==========================================/
         // HUD ANCORADO NA CÂMARA (Jogabilidade)
@@ -998,25 +1063,33 @@
             playSound('beep-up');
             obj.scale.y *= 0.7; setTimeout(() => obj.scale.y /= 0.7, 150);
             const action = obj.userData.action;
-            if (action === 'start_game') { 
+            
+            if (action === 'show_local_menu') { switchScene('local_menu'); }
+            else if (action === 'start_game_pvp') { 
+                gameMode = 'pvp';
                 btnRestart.visible = true;
                 switchScene('game'); 
-                restarting = true; // Defer piece creation until after transition
+                restarting = true; 
+            } 
+            else if (action === 'start_game_cpu') { 
+                gameMode = 'cpu';
+                btnRestart.visible = true;
+                switchScene('game'); 
+                restarting = true; 
             } 
             else if (action === 'restart_game') {
                 switchScene('game');
-                if (selectedPiece) { // Clear selection before transition
-                    selectedPiece.targetPos.y = 0.4;
-                    selectedPiece = null;
-                }
-                clearHighlights();
-                restarting = true; // Defer piece creation
+                if (selectedPiece) { selectedPiece.targetPos.y = 0.4; selectedPiece = null; }
+                clearHighlights(); restarting = true; 
             }
             else if (action === 'resume_game') { switchScene('game'); } 
             else if (action === 'show_options') { switchScene('options'); } 
             else if (action === 'show_about') { switchScene('about'); } 
             else if (action === 'show_menu') { switchScene('menu'); } 
             else if (action === 'show_multiplayer') { switchScene('multiplayer'); }
+            else if (action === 'generate_link') {
+                initP2PHost();
+            }
             else if (action === 'toggle_tips') {
                 tipsEnabled = !tipsEnabled;
                 const newText = tipsEnabled ? "Dicas e Ajuda: ON" : "Dicas e Ajuda: OFF";
@@ -1029,8 +1102,6 @@
                 ctx.fillStyle = '#000000'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
                 ctx.font = 'bold 50px sans-serif'; ctx.fillText(newText, canvas.width/2, canvas.height/2);
                 btnTipsObj.material.map.needsUpdate = true;
-            } else if (action === 'mock_invite') {
-                const mat = obj.material; mat.color.setHex(0x555555); setTimeout(() => mat.color.setHex(0xffffff), 1000);
             }
         }
 
@@ -1040,12 +1111,14 @@
             if (obj.userData.isHUDButton) {
                 playSound('beep-up');
                 obj.scale.set(0.7, 0.15, 1); setTimeout(() => obj.scale.set(0.8, 0.2, 1), 150);
-                if (obj.userData.action === '☰ MENU') { 
-                    switchScene('menu'); 
-                }
+                if (obj.userData.action === '☰ MENU') { switchScene('menu'); }
                 return;
             }
             if (currentScene !== 'game' || engine.winner !== null) return;
+            
+            // Segurança: Se for Multiplayer e não for meu turno, ignora toques na board
+            if (gameMode === 'multi' && engine.currentTurn !== myTeamId) return;
+
             if (obj.userData.isPiece) {
                 const pd = obj.userData.pieceData;
                 if (!pd.isDead && !pd.isVictoryPending && !pd.isMoving && !pd.isBigAnim && pd.trapAnimState === 0) {
@@ -1061,23 +1134,32 @@
             } else if (obj.userData.isTile && selectedPiece) { tryMove(obj.userData.gridX, obj.userData.gridY); }
         }
 
-        function tryMove(endX, endY) {
+        function executeRemoteMove(startX, startY, endX, endY) {
+            const piece = engine.getPieceAt(startX, startY);
+            if(piece) {
+                selectedPiece = piece;
+                tryMove(endX, endY, true); 
+            }
+        }
+
+        function tryMove(endX, endY, isRemote = false) {
             if (engine.isValidMove(selectedPiece, selectedPiece.gridX, selectedPiece.gridY, endX, endY)) {
                 const startX = selectedPiece.gridX;
                 const startY = selectedPiece.gridY;
-                const isRat = selectedPiece.rank === 1;
+                
+                // MULTIPLAYER SINC: Envia a jogada para o adversário se o movimento foi local
+                if (gameMode === 'multi' && !isRemote && peerConnection && peerConnection.open) {
+                    peerConnection.send({ type: 'move', startX, startY, endX, endY });
+                }
 
+                const isRat = selectedPiece.rank === 1;
                 const captured = engine.executeMove(selectedPiece, endX, endY);
                 const targetWorld = getWorldPos(endX, endY);
 
                 const startIsWater = engine.isWater(startX, startY);
                 const endIsWater = engine.isWater(endX, endY);
 
-                if (isRat && startIsWater !== endIsWater) {
-                    playSound('splash');
-                } else {
-                    playSound('jump');
-                }
+                if (isRat && startIsWater !== endIsWater) { playSound('splash'); } else { playSound('jump'); }
 
                 if (selectedPiece.trapAnimState > 0) selectedPiece.trapAnimState = 0;
                 selectedPiece.startPos = selectedPiece.mesh.position.clone();
@@ -1092,11 +1174,21 @@
         const raycaster = new THREE.Raycaster(); const mouse = new THREE.Vector2();
         function onPointerDown(event) {
             initAudio(); 
-            isTransitioningCamera = false; // Permite ao jogador retomar o controle manual da câmera
-            if (renderer.xr.isPresenting || event.target.tagName === 'BUTTON') return;
-            if (event.touches && event.touches.length > 1) {
-                return;
+
+            if (!gyroInitialized) {
+                gyroInitialized = true;
+                if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+                    DeviceOrientationEvent.requestPermission().then(response => {
+                        if (response === 'granted') window.addEventListener('deviceorientation', handleOrientation);
+                    }).catch(console.error);
+                } else {
+                    window.addEventListener('deviceorientation', handleOrientation);
+                }
             }
+
+            isTransitioningCamera = false; 
+            if (renderer.xr.isPresenting || event.target.tagName === 'BUTTON') return;
+            if (event.touches && event.touches.length > 1) { return; }
             if (event.changedTouches) {
                 mouse.x = (event.changedTouches[0].clientX / window.innerWidth) * 2 - 1;
                 mouse.y = -(event.changedTouches[0].clientY / window.innerHeight) * 2 + 1;
@@ -1107,10 +1199,12 @@
             raycaster.setFromCamera(mouse, camera);
             let intersectables = [];
             if (currentScene === 'menu') intersectables = menuGroup.children;
+            else if (currentScene === 'local_menu') intersectables = localMenuGroup.children;
             else if (currentScene === 'options') intersectables = optionsGroup.children;
             else if (currentScene === 'about') intersectables = aboutGroup.children;
             else if (currentScene === 'multiplayer') intersectables = multiplayerGroup.children;
             else if (currentScene === 'game') intersectables = [...gameGroup.children, ...hudGroup.children];
+            
             const intersects = raycaster.intersectObjects(intersectables, true)
                 .filter(hit => {
                     const ud = hit.object.userData; if (!ud) return false;
@@ -1127,7 +1221,7 @@
         const initialGameScale = new THREE.Vector3();
 
         function onTouchStart(event) {
-            isTransitioningCamera = false; // Permite ao jogador retomar controle
+            isTransitioningCamera = false; 
             if (renderer.xr.isPresenting && event.touches.length === 2) {
                 event.preventDefault();
                 const t1 = event.touches[0];
@@ -1180,21 +1274,9 @@
         const initialGameScaleVR = new THREE.Vector3();
 
         controller1.addEventListener('selectstart', () => { controller1Selected = true; });
-        controller1.addEventListener('selectend', () => {
-            controller1Selected = false;
-            if (isZoomingVR) {
-                gameGroup.userData.targetScale = gameGroup.scale.x;
-            }
-            isZoomingVR = false;
-        });
+        controller1.addEventListener('selectend', () => { controller1Selected = false; if (isZoomingVR) { gameGroup.userData.targetScale = gameGroup.scale.x; } isZoomingVR = false; });
         controller2.addEventListener('selectstart', () => { controller2Selected = true; });
-        controller2.addEventListener('selectend', () => {
-            controller2Selected = false;
-            if (isZoomingVR) {
-                gameGroup.userData.targetScale = gameGroup.scale.x;
-            }
-            isZoomingVR = false;
-        });
+        controller2.addEventListener('selectend', () => { controller2Selected = false; if (isZoomingVR) { gameGroup.userData.targetScale = gameGroup.scale.x; } isZoomingVR = false; });
 
         function onSelectXR(event) {
             initAudio(); const controller = event.target;
@@ -1214,10 +1296,12 @@
             raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld); raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
             let intersectables = [];
             if (currentScene === 'menu') intersectables = menuGroup.children;
+            else if (currentScene === 'local_menu') intersectables = localMenuGroup.children;
             else if (currentScene === 'options') intersectables = optionsGroup.children;
             else if (currentScene === 'about') intersectables = aboutGroup.children;
             else if (currentScene === 'multiplayer') intersectables = multiplayerGroup.children;
             else if (currentScene === 'game') intersectables = [...gameGroup.children, ...hudGroup.children];
+            
             const intersects = raycaster.intersectObjects(intersectables, true)
                 .filter(hit => {
                     const ud = hit.object.userData; if (!ud) return false;
@@ -1287,7 +1371,13 @@
             }
 
             if(controls.userData) {
-                controls.target.lerp(controls.userData.target, 4 * delta);
+                currentGyroOffset.lerp(targetGyroOffset, 5 * delta);
+                const finalTarget = controls.userData.target.clone();
+                if (!renderer.xr.isPresenting) {
+                    finalTarget.x += currentGyroOffset.x;
+                    finalTarget.z += currentGyroOffset.y;
+                }
+                controls.target.lerp(finalTarget, 4 * delta);
             }
 
             if (isTransitioningCamera) {
@@ -1362,7 +1452,7 @@
             const snapAngle = Math.round(camAngle / (Math.PI / 2)) * (Math.PI / 2);
             trapTextMat.map.rotation = snapAngle;
             
-            [menuGroup, optionsGroup, aboutGroup, multiplayerGroup].forEach(grp => {
+            [menuGroup, localMenuGroup, optionsGroup, aboutGroup, multiplayerGroup].forEach(grp => {
                 if(grp.visible) { grp.lookAt(camera.position); grp.position.y = 2.5 + Math.sin(time * 2) * 0.1; }
             });
 
