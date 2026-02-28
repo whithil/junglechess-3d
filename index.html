@@ -94,6 +94,7 @@
         
         let gameMode = 'pvp'; // 'pvp', 'cpu', 'multi'
         let myTeamId = 1; // 1 = Verde (Base), 0 = Vermelho. No PVP local jogamos por ambos.
+        let isCPUThinking = false; // Bloqueio enquanto o CPU processa a jogada
         
         // Conexão P2P
         let peer = null;
@@ -705,6 +706,8 @@
             const targetGameY = currentScene === 'game' ? 0 : -3.5;
             
             document.getElementById('ui-container').style.display = currentScene === 'game' ? 'flex' : 'none';
+            // Exibe a HUD de Status sempre que for o momento do jogo
+            document.getElementById('status').style.display = currentScene === 'game' ? 'block' : 'none';
             hudGroup.visible = currentScene === 'game';
 
             menuGroup.visible = currentScene === 'menu';
@@ -795,6 +798,76 @@
                 initP2PGuest(joinRoom);
             }
         });
+
+        // ==========================================/
+        // ALGORITMO DA INTELIGÊNCIA ARTIFICIAL (CPU)
+        // ==========================================/
+        function makeCPUMove() {
+            if (currentScene !== 'game' || gameMode !== 'cpu' || engine.currentTurn !== 0 || engine.winner !== null) {
+                isCPUThinking = false;
+                return;
+            }
+
+            // FIX: Ignorar peças que ainda estão no processo de encolher/morrer na board visual
+            const cpuPieces = pieceMeshes.filter(p => p.team === 0 && !p.isDead && !p.isDying);
+            let possibleMoves = [];
+
+            cpuPieces.forEach(piece => {
+                for (let x = 0; x < BOARD_COLS; x++) {
+                    for (let y = 0; y < BOARD_ROWS; y++) {
+                        if (engine.isValidMove(piece, piece.gridX, piece.gridY, x, y)) {
+                            let score = 0;
+                            const target = engine.getPieceAt(x, y);
+                            
+                            // 1. Recompensa por capturar
+                            if (target) {
+                                score += target.rank * 10;
+                                // Se o Rato matar o Elefante, é uma jogada de mestre
+                                if (piece.rank === 1 && target.rank === 8) score += 100;
+                            }
+                            
+                            // 2. Recompensa máxima por vitória (Chegar na toca inimiga)
+                            if (engine.isDen(x, y, 1)) {
+                                score += 10000;
+                            }
+
+                            // 3. Punição severa por entrar em armadilha inimiga atoa
+                            if (engine.isTrap(x, y, 1)) {
+                                score -= 50;
+                            }
+
+                            // 4. Bônus por avançar em direção à toca inimiga (Toca do jogador Verde é em x:3, y:8)
+                            const oldDistToDen = Math.abs(piece.gridX - 3) + Math.abs(piece.gridY - 8);
+                            const newDistToDen = Math.abs(x - 3) + Math.abs(y - 8);
+                            if (newDistToDen < oldDistToDen) {
+                                score += 2;
+                            }
+
+                            possibleMoves.push({ piece, x, y, score });
+                        }
+                    }
+                }
+            });
+
+            if (possibleMoves.length > 0) {
+                // Ordena pelas melhores jogadas
+                possibleMoves.sort((a, b) => b.score - a.score);
+                const bestScore = possibleMoves[0].score;
+                // Filtra todas as jogadas que empatam na melhor pontuação
+                const bestMoves = possibleMoves.filter(m => m.score === bestScore);
+                // Escolhe aleatoriamente entre as melhores opções (Para o CPU não ser 100% previsível)
+                const chosenMove = bestMoves[Math.floor(Math.random() * bestMoves.length)];
+                
+                selectedPiece = chosenMove.piece;
+                tryMove(chosenMove.x, chosenMove.y);
+            } else {
+                // FIX: Se as peças da CPU estiverem bloqueadas e presas sem saídas possíveis, passa a vez
+                // Evita que o motor procure jogadas ao infinito travando a CPU
+                engine.currentTurn = 1;
+            }
+            
+            isCPUThinking = false;
+        }
 
         // ==========================================/
         // HUD ANCORADO NA CÂMARA (Jogabilidade)
@@ -1123,10 +1196,10 @@
                 if (obj.userData.action === '☰ MENU') { switchScene('menu'); }
                 return;
             }
-            if (currentScene !== 'game' || engine.winner !== null) return;
+            if (currentScene !== 'game' || engine.winner !== null || isCPUThinking) return;
             
-            // Segurança: Se for Multiplayer e não for meu turno, ignora toques na board
-            if (gameMode === 'multi' && engine.currentTurn !== myTeamId) return;
+            // Segurança: Bloqueia interações fora do turno no Multiplayer ou CPU
+            if ((gameMode === 'multi' || gameMode === 'cpu') && engine.currentTurn !== myTeamId) return;
 
             if (obj.userData.isPiece) {
                 const pd = obj.userData.pieceData;
@@ -1359,6 +1432,40 @@
                     selectedPiece = null;
                     clearHighlights();
                     restarting = false;
+                }
+            }
+
+            // GATILHO DA IA (CPU)
+            if (currentScene === 'game' && gameMode === 'cpu' && engine.currentTurn === 0 && !isCPUThinking && engine.winner === null && !restarting) {
+                // FIX: Agora também verifica se há peças no status de morte (.isDying)
+                const isAnyPieceMoving = pieceMeshes.some(p => p.isMoving || p.isMorphing || p.squashTimer > 0 || p.trapAnimState > 0 || p.captureAnimTimer > 0 || p.isDying);
+                if (!isAnyPieceMoving) {
+                    isCPUThinking = true;
+                    setTimeout(makeCPUMove, 1000);
+                }
+            }
+
+            // =====================================
+            // UI Dinâmica de Status (Otimizado)
+            // =====================================
+            if (currentScene === 'game') {
+                const statusDiv = document.getElementById('status');
+                let newText = "";
+                let newColor = "";
+                
+                if (engine.winner !== null) {
+                    newText = engine.winner === 1 ? "🏆 VITÓRIA DO VERDE! 🏆" : "🏆 VITÓRIA DO VERMELHO! 🏆";
+                    newColor = "#ffeb3b";
+                } else {
+                    if (gameMode === 'cpu') newText = engine.currentTurn === 1 ? "Vez do Jogador (Verde)" : "Vez da CPU (Vermelho)";
+                    else if (gameMode === 'pvp') newText = engine.currentTurn === 1 ? "Vez do Verde" : "Vez do Vermelho";
+                    else if (gameMode === 'multi') newText = engine.currentTurn === myTeamId ? "Sua Vez!" : "Vez do Oponente";
+                    newColor = engine.currentTurn === 1 ? "#25A02B" : "#E52222";
+                }
+                
+                if (statusDiv.innerText !== newText) {
+                    statusDiv.innerText = newText;
+                    statusDiv.style.color = newColor;
                 }
             }
             
