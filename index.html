@@ -761,6 +761,9 @@
         function onPointerDown(event) {
             initAudio(); 
             if (renderer.xr.isPresenting || event.target.tagName === 'BUTTON') return;
+            if (event.touches && event.touches.length > 1) {
+                return; // Managed by touch zoom handlers
+            }
             if (event.changedTouches) {
                 mouse.x = (event.changedTouches[0].clientX / window.innerWidth) * 2 - 1;
                 mouse.y = -(event.changedTouches[0].clientY / window.innerHeight) * 2 + 1;
@@ -785,6 +788,47 @@
         }
         window.addEventListener('pointerdown', onPointerDown);
 
+        // Pinch-to-zoom logic for touch devices
+        let isPinching = false;
+        let initialPinchDistance = 0;
+        const initialGameScale = new THREE.Vector3();
+
+        function onTouchStart(event) {
+            if (renderer.xr.isPresenting && event.touches.length === 2) {
+                event.preventDefault();
+                const t1 = event.touches[0];
+                const t2 = event.touches[1];
+                initialPinchDistance = Math.hypot(t1.pageX - t2.pageX, t1.pageY - t2.pageY);
+                initialGameScale.copy(gameGroup.scale);
+                isPinching = true;
+            }
+        }
+
+        function onTouchMove(event) {
+            if (isPinching && event.touches.length === 2) {
+                event.preventDefault();
+                const t1 = event.touches[0];
+                const t2 = event.touches[1];
+                const currentPinchDistance = Math.hypot(t1.pageX - t2.pageX, t1.pageY - t2.pageY);
+                const scaleFactor = currentPinchDistance / initialPinchDistance;
+                const newScale = initialGameScale.clone().multiplyScalar(scaleFactor);
+                // Clamp the scale to reasonable values
+                newScale.clampScalar(0.1, 2.0);
+                gameGroup.scale.copy(newScale);
+            }
+        }
+
+        function onTouchEnd(event) {
+            if (isPinching) {
+                isPinching = false;
+            }
+        }
+
+        window.addEventListener('touchstart', onTouchStart, { passive: false });
+        window.addEventListener('touchmove', onTouchMove, { passive: false });
+        window.addEventListener('touchend', onTouchEnd);
+
+
         let hitTestSource = null, hitTestSourceRequested = false, reticle, isARPlaced = false, isARSession = false;
         reticle = new THREE.Mesh(new THREE.RingGeometry(0.15, 0.2, 32).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xffffff }));
         reticle.matrixAutoUpdate = false; reticle.visible = false; scene.add(reticle);
@@ -798,11 +842,27 @@
         const line = new THREE.Line(geometry, new THREE.LineBasicMaterial({ color: 0xffffff })); line.name = 'line'; line.scale.z = 5;
         controller1.add(line.clone()); controller2.add(line.clone());
 
+        // VR controller zoom logic
+        let controller1Selected = false, controller2Selected = false, isZoomingVR = false;
+        let initialControllerDist = 0;
+        const initialGameScaleVR = new THREE.Vector3();
+
+        controller1.addEventListener('selectstart', () => { controller1Selected = true; });
+        controller1.addEventListener('selectend', () => { controller1Selected = false; isZoomingVR = false; });
+        controller2.addEventListener('selectstart', () => { controller2Selected = true; });
+        controller2.addEventListener('selectend', () => { controller2Selected = false; isZoomingVR = false; });
+
+
         function onSelectXR(event) {
             initAudio(); const controller = event.target;
+            if (controller1Selected && controller2Selected) return; // Don't interact if zooming
+
             if (isARSession && !isARPlaced) {
                 if (reticle.visible) {
-                    gameGroup.position.setFromMatrixPosition(reticle.matrix); gameGroup.scale.set(0.3, 0.3, 0.3);
+                    const arPos = new THREE.Vector3().setFromMatrixPosition(reticle.matrix);
+                    arPos.y -= 0.2; // Lower the board slightly
+                    gameGroup.position.copy(arPos);
+                    gameGroup.scale.set(0.3, 0.3, 0.3);
                     isARPlaced = true; reticle.visible = false; document.getElementById('ar-overlay').style.display = 'none';
                 }
                 return;
@@ -853,9 +913,34 @@
 
         function render(timestamp, frame) {
             const delta = clock.getDelta(); const time = clock.getElapsedTime();
+            
+            // Handle VR zoom
+            if (controller1Selected && controller2Selected) {
+                if (!isZoomingVR) {
+                    isZoomingVR = true;
+                    initialControllerDist = grip1.position.distanceTo(grip2.position);
+                    initialGameScaleVR.copy(gameGroup.scale);
+                }
+                const currentDist = grip1.position.distanceTo(grip2.position);
+                if (initialControllerDist > 0.01) { // Avoid division by zero
+                    const scaleFactor = currentDist / initialControllerDist;
+                    const newScale = initialGameScaleVR.clone().multiplyScalar(scaleFactor);
+                    newScale.clampScalar(0.1, 2.0); // Clamp scale
+                    gameGroup.scale.copy(newScale);
+                }
+            } else {
+                isZoomingVR = false;
+            }
+
+
+            if (!isPinching && !isZoomingVR) { // Only lerp scale if not actively zooming
+                const s = THREE.MathUtils.lerp(gameGroup.scale.y, gameGroup.userData.targetScale, 4 * delta);
+                if (Math.abs(s - gameGroup.userData.targetScale) > 0.001) {
+                    gameGroup.scale.set(s,s,s);
+                }
+            }
             gameGroup.position.y = THREE.MathUtils.lerp(gameGroup.position.y, gameGroup.userData.targetY, 4 * delta);
-            const s = THREE.MathUtils.lerp(gameGroup.scale.y, gameGroup.userData.targetScale, 4 * delta);
-            gameGroup.scale.set(s, s, s);
+            
 
             const targetRedLight = engine.currentTurn === 0 ? 6.0 : 1.8;
             const targetGreenLight = engine.currentTurn === 1 ? 6.0 : 1.8;
