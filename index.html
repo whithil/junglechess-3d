@@ -235,10 +235,86 @@
             if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             if (audioCtx.state === 'suspended') audioCtx.resume();
         }
+        
+        function createNoiseBuffer() {
+            const bufferSize = audioCtx.sampleRate * 2.5; 
+            const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) {
+                data[i] = Math.random() * 2 - 1;
+            }
+            return buffer;
+        }
+
+        function playThump(now, buffer) {
+            const source = audioCtx.createBufferSource();
+            source.buffer = buffer;
+            const filter = audioCtx.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.setValueAtTime(400, now);
+            filter.frequency.exponentialRampToValueAtTime(40, now + 0.5);
+            
+            const gain = audioCtx.createGain();
+            gain.gain.setValueAtTime(0, now);
+            gain.gain.linearRampToValueAtTime(0.8, now + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.01, now + 0.6);
+
+            source.connect(filter);
+            filter.connect(gain);
+            gain.connect(audioCtx.destination);
+            source.start(now);
+        }
+
+        function playChurn(now, buffer) {
+            const source = audioCtx.createBufferSource();
+            source.buffer = buffer;
+            const filter = audioCtx.createBiquadFilter();
+            filter.type = 'bandpass';
+            filter.frequency.setValueAtTime(1200, now);
+            filter.Q.setValueAtTime(2, now);
+            filter.frequency.exponentialRampToValueAtTime(300, now + 1.2);
+            
+            const gain = audioCtx.createGain();
+            gain.gain.setValueAtTime(0, now);
+            gain.gain.linearRampToValueAtTime(0.4, now + 0.05);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 1.2);
+
+            source.connect(filter);
+            filter.connect(gain);
+            gain.connect(audioCtx.destination);
+            source.start(now);
+        }
+
+        function playSpray(now, buffer) {
+            const source = audioCtx.createBufferSource();
+            source.buffer = buffer;
+            const filter = audioCtx.createBiquadFilter();
+            filter.type = 'highpass';
+            filter.frequency.setValueAtTime(3000, now);
+            
+            const gain = audioCtx.createGain();
+            gain.gain.setValueAtTime(0, now);
+            gain.gain.linearRampToValueAtTime(0.2, now + 0.01);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 1.8);
+
+            source.connect(filter);
+            filter.connect(gain);
+            gain.connect(audioCtx.destination);
+            source.start(now);
+        }
 
         function playSound(type) {
             if (!audioCtx) return;
             const now = audioCtx.currentTime;
+            
+            if (type === 'splash') {
+                const buffer = createNoiseBuffer();
+                playThump(now, buffer);
+                playChurn(now, buffer);
+                playSpray(now, buffer);
+                return;
+            }
+
             const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
             osc.connect(gain); gain.connect(audioCtx.destination);
 
@@ -285,6 +361,14 @@
         // THREE.JS SETUP & GRÁFICOS
         // ==========================================
         const scene = new THREE.Scene();
+        const loader = new THREE.TextureLoader();
+        const texture = loader.load(
+          'assets/bg1.png',
+          () => {
+            texture.mapping = THREE.EquirectangularReflectionMapping;
+            texture.colorSpace = THREE.SRGBColorSpace;
+            scene.background = texture;
+          });
         const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
         camera.position.set(0, 8, 8);
         scene.add(camera); 
@@ -745,15 +829,29 @@
 
         function tryMove(endX, endY) {
             if (engine.isValidMove(selectedPiece, selectedPiece.gridX, selectedPiece.gridY, endX, endY)) {
+                const startX = selectedPiece.gridX;
+                const startY = selectedPiece.gridY;
+                const isRat = selectedPiece.rank === 1;
+
                 const captured = engine.executeMove(selectedPiece, endX, endY);
                 const targetWorld = getWorldPos(endX, endY);
+
+                const startIsWater = engine.isWater(startX, startY);
+                const endIsWater = engine.isWater(endX, endY);
+
+                if (isRat && startIsWater !== endIsWater) {
+                    playSound('splash');
+                } else {
+                    playSound('jump');
+                }
+
                 if (selectedPiece.trapAnimState > 0) selectedPiece.trapAnimState = 0;
                 selectedPiece.startPos = selectedPiece.mesh.position.clone();
                 selectedPiece.targetPos = new THREE.Vector3(targetWorld.x, 0.4, targetWorld.z);
                 selectedPiece.isMoving = true; selectedPiece.moveProgress = 0;
                 selectedPiece.isMorphing = false; selectedPiece.isBigAnim = false; selectedPiece.cylinder.visible = true;
                 selectedPiece.capturedPiece = captured; selectedPiece.isVictoryPending = (engine.winner !== null);
-                playSound('jump'); selectedPiece = null; clearHighlights(); updateStatusUI();
+                selectedPiece = null; clearHighlights(); updateStatusUI();
             } else { if (selectedPiece) selectedPiece.targetPos.y = 0.4; selectedPiece = null; clearHighlights(); }
         }
 
@@ -898,7 +996,8 @@
                 });
             if (intersects.length > 0) handleInteraction(intersects[0]);
         }
-        controller1.addEventListener('select', onSelectXR); controller2.addEventListener('select', onSelectXR);
+        controller1.addEventListener('select', onSelectXR);
+        controller2.addEventListener('select', onSelectXR);
         
         renderer.xr.addEventListener('sessionstart', (e) => {
             isARSession = renderer.xr.getSession().mode === 'immersive-ar';
