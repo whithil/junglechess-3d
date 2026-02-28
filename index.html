@@ -395,6 +395,14 @@
         renderer.xr.enabled = true; renderer.shadowMap.enabled = true;
         document.body.appendChild(renderer.domElement);
 
+        const vrButton = VRButton.createButton(renderer);
+        vrButton.style.display = 'none';
+        document.body.appendChild(vrButton);
+
+        const arButton = ARButton.createButton(renderer);
+        arButton.style.display = 'none';
+        document.body.appendChild(arButton);
+
         const controls = new OrbitControls(camera, renderer.domElement);
         controls.target.set(0, 0, 0); controls.update();
         controls.userData = { target: new THREE.Vector3(0, 0, 0) }; 
@@ -608,13 +616,13 @@
         // --- Paineis Principais ---
         menuGroup.add(createMenuPanel(3.0, 4.0, -0.9));
         localMenuGroup.add(createMenuPanel(3.0, 3.5, 0.0));
-        optionsGroup.add(createMenuPanel(3.0, 3.5, 0.0));
+        optionsGroup.add(createMenuPanel(3.0, 4.5, 0.0));
         aboutGroup.add(createMenuPanel(4.5, 4.2, 0.0));
         multiplayerGroup.add(createMenuPanel(3.5, 4.0, 0.0));
 
         menuGroup.add(createCloseButton(3.0, 4.0, -0.9));
         localMenuGroup.add(createCloseButton(3.0, 3.5, 0.0));
-        optionsGroup.add(createCloseButton(3.0, 3.5, 0.0));
+        optionsGroup.add(createCloseButton(3.0, 4.5, 0.0));
         aboutGroup.add(createCloseButton(4.5, 4.2, 0.0));
         multiplayerGroup.add(createCloseButton(3.5, 4.0, 0.0));
 
@@ -686,12 +694,17 @@
 
         // --- SUBMENU: OPÇÕES ---
         const optTitle = createTextSprite("OPÇÕES", 80, 512, 128, '#ffeb3b').sprite;
-        optTitle.position.y = 1.0; optionsGroup.add(optTitle);
+        optTitle.position.y = 1.5; optionsGroup.add(optTitle);
         const btnTipsObj = createTextSprite("Dicas e Ajuda: ON", 50, 512, 128, '#000000', '#6B4226');
         const btnTips = btnTipsObj.sprite;
-        btnTips.position.y = 0.0; btnTips.userData = { isMenuBtn: true, action: 'toggle_tips' }; optionsGroup.add(btnTips);
+        btnTips.position.y = 0.5; btnTips.userData = { isMenuBtn: true, action: 'toggle_tips' }; optionsGroup.add(btnTips);
+        const btnVR = createTextSprite("Entrar em VR", 50, 512, 128, '#000000', '#615142').sprite;
+        btnVR.position.y = -0.5; btnVR.userData = { isMenuBtn: true, action: 'show_vr' }; optionsGroup.add(btnVR);
+        const btnAR = createTextSprite("Entrar em AR", 50, 512, 128, '#000000', '#6B4226').sprite;
+        btnAR.position.y = -1.5; btnAR.userData = { isMenuBtn: true, action: 'show_ar' }; optionsGroup.add(btnAR);
         const btnOptBack = createTextSprite("Voltar", 50, 512, 128, '#000000', '#4F4237').sprite;
-        btnOptBack.position.y = -1.0; btnOptBack.userData = { isMenuBtn: true, action: 'show_menu' }; optionsGroup.add(btnOptBack);
+        btnOptBack.position.y = -2.5; btnOptBack.userData = { isMenuBtn: true, action: 'show_menu' }; optionsGroup.add(btnOptBack);
+
 
         // --- SUBMENU: SOBRE ---
         const abtTitle = createTextSprite("SOBRE", 80, 512, 128, '#ffeb3b').sprite;
@@ -1184,6 +1197,10 @@
                 ctx.fillStyle = '#000000'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
                 ctx.font = 'bold 50px sans-serif'; ctx.fillText(newText, canvas.width/2, canvas.height/2);
                 btnTipsObj.material.map.needsUpdate = true;
+            } else if (action === 'show_vr') {
+                vrButton.click();
+            } else if (action === 'show_ar') {
+                arButton.click();
             }
         }
 
