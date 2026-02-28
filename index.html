@@ -24,6 +24,16 @@
             flex-direction: column;
             justify-content: space-between;
         }
+        #header {
+            text-align: center;
+            padding: 15px;
+            background: linear-gradient(to bottom, rgba(0,0,0,0.7), transparent);
+            color: white;
+            text-shadow: 1px 1px 2px black;
+        }
+        h1 { margin: 0; font-size: 24px; }
+        #status { font-size: 18px; margin-top: 5px; font-weight: bold; color: #ffeb3b; display: none; }
+        
         #controls {
             padding: 15px;
             display: flex;
@@ -55,6 +65,10 @@
 </head>
 <body>
     <div id="ui-container">
+        <div id="header">
+            <h1>Jungle Chess 3D</h1>
+            <div id="status">Vez do Jogador Verde</div>
+        </div>
         <div id="controls"></div>
     </div>
     <div id="ar-overlay">Toque na tela para posicionar o tabuleiro</div>
@@ -65,6 +79,8 @@
         import { VRButton } from 'three/addons/webxr/VRButton.js';
         import { ARButton } from 'three/addons/webxr/ARButton.js';
         import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
+        import { FontLoader } from 'three/addons/loaders/FontLoader.js';
+        import { TextGeometry } from 'three/addons/geometries/TextGeometry.js';
 
         // ==========================================/
         // ESTADOS DO JOGO (STATE MACHINE)
@@ -72,6 +88,7 @@
         let currentScene = 'menu'; // 'menu', 'options', 'about', 'game', 'multiplayer'
         let tipsEnabled = true;
         let restarting = false; // Flag to delay piece initialization on restart
+        let isTransitioningCamera = false; // Controle de zoom e enquadramento de câmera
 
         // ==========================================/
         // DADOS DO Jogo E REGRAS
@@ -337,7 +354,10 @@
             scene.background = texture;
           });
         const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
-        camera.position.set(0, 8, 8);
+        
+        // FIX: Mais zoom inicial (aproximado no eixo Y e Z)
+        camera.position.set(0, 7, 8);
+        camera.userData = { targetPos: new THREE.Vector3(0, 7, 8) }; // Controla os enquadramentos dinâmicos
         scene.add(camera); 
 
         const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -348,7 +368,7 @@
 
         const controls = new OrbitControls(camera, renderer.domElement);
         controls.target.set(0, 0, 0); controls.update();
-        controls.userData = { target: new THREE.Vector3(0, 0, 0) }; // For animating the target
+        controls.userData = { target: new THREE.Vector3(0, 0, 0) }; 
 
         // ------------------------------------------
         // SISTEMA DE ILUMINAÇÃO SUTIL
@@ -381,7 +401,6 @@
 
         function createBannerClothTexture(team) {
             const canvas = document.createElement('canvas');
-            // Dimensões proporcionais à geometria do estandarte
             canvas.width = 512;
             canvas.height = 768;
             const ctx = canvas.getContext('2d');
@@ -390,7 +409,6 @@
             const color1 = teamColor.clone().multiplyScalar(0.8).getStyle();
             const color2 = teamColor.clone().multiplyScalar(1.2).getStyle();
 
-            // Fundo Quadriculado
             const size = 128;
             for (let x = 0; x < canvas.width; x += size) {
                 for (let y = 0; y < canvas.height; y += size) {
@@ -399,11 +417,9 @@
                 }
             }
 
-            // Estilo de fonte idêntico ao das peças
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             
-            // Palavra "PLAYER" pequena
             ctx.fillStyle = '#fff';
             ctx.strokeStyle = '#000';
             ctx.lineWidth = 8;
@@ -411,8 +427,7 @@
             ctx.strokeText("PLAYER", 256, 180);
             ctx.fillText("PLAYER", 256, 180);
 
-            // Número 1 ou 2 Gigante
-            const num = team === 1 ? "1" : "2"; // Verde (1) = Player 1, Vermelho (0) = Player 2
+            const num = team === 1 ? "1" : "2"; 
             ctx.lineWidth = 20;
             ctx.font = 'bold 450px sans-serif';
             ctx.strokeText(num, 256, 520);
@@ -440,29 +455,24 @@
             crossbar.position.set(crossbarWidth / 2, poleHeight - 0.1, 0);
             banner.add(crossbar);
 
-            // FIX: Usamos BoxGeometry com espessura minúscula para resolver o espelhamento do verso nativamente
             const clothGeo = new THREE.BoxGeometry(crossbarWidth, bannerHeight, 0.01, 10, 15, 1);
             clothGeo.translate(0, -bannerHeight / 2, 0);
 
             const teamColor = new THREE.Color(TEAMS[team].color);
             const color1 = teamColor.clone().multiplyScalar(0.8).getStyle();
             
-            // Material principal com a nossa textura desenhada no Canvas
             const clothFaceMat = new THREE.MeshStandardMaterial({
                 map: createBannerClothTexture(team),
                 roughness: 0.9,
                 metalness: 0.1,
             });
 
-            // Material liso para as beiradas ínfimas da caixa
             const edgeMat = new THREE.MeshStandardMaterial({
                 color: color1,
                 roughness: 0.9,
                 metalness: 0.1,
             });
 
-            // Array de materiais mapeados para o BoxGeometry: 
-            // [Direita, Esquerda, Cima, Baixo, Frente (+Z), Verso (-Z)]
             const materials = [edgeMat, edgeMat, edgeMat, edgeMat, clothFaceMat, clothFaceMat];
 
             const cloth = new THREE.Mesh(clothGeo, materials);
@@ -479,16 +489,63 @@
         }
 
         const bannerRed = createBanner(0);
-        // Cantinho superior esquerdo do tabuleiro, perfeitamente alinhado nas quinas (X/Z) e tocando a base (Y)
         bannerRed.banner.position.set(-3.55, -0.1, -4.55);
-        // Mantém a rotação de 180 graus
         bannerRed.banner.rotation.y = Math.PI;
         bannerGroup.add(bannerRed.banner);
 
         const bannerGreen = createBanner(1);
-        // Cantinho inferior direito do tabuleiro, perfeitamente alinhado nas quinas (X/Z) e tocando a base (Y)
         bannerGreen.banner.position.set(3.55, -0.1, 4.55);
         bannerGroup.add(bannerGreen.banner);
+
+        // ==========================================/
+        // MOLDURA DE MADEIRA PARA OS MENUS
+        // ==========================================/
+        function createMenuPanel(width, height, posY) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 512; canvas.height = 512;
+            const ctx = canvas.getContext('2d');
+            
+            // Fundo madeira clara alaranjada
+            ctx.fillStyle = '#E69545'; 
+            ctx.fillRect(0, 0, 512, 512);
+            
+            // Fibras da madeira bem sutis
+            ctx.strokeStyle = '#CC7A33';
+            ctx.lineWidth = 5;
+            for (let i = 0; i < 20; i++) {
+                ctx.beginPath();
+                ctx.moveTo(0, Math.random() * 512);
+                ctx.bezierCurveTo(170, Math.random() * 512, 340, Math.random() * 512, 512, Math.random() * 512);
+                ctx.stroke();
+            }
+            
+            // Borda de madeira escura marrom
+            ctx.strokeStyle = '#4A2E15';
+            ctx.lineWidth = 40; 
+            ctx.strokeRect(0, 0, 512, 512);
+            
+            // Sombra interna
+            ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+            ctx.lineWidth = 10;
+            ctx.strokeRect(20, 20, 472, 472);
+
+            const faceMat = new THREE.MeshStandardMaterial({ 
+                map: new THREE.CanvasTexture(canvas), 
+                roughness: 0.9 
+            });
+            const edgeMat = new THREE.MeshStandardMaterial({ 
+                color: '#4A2E15', 
+                roughness: 0.9 
+            });
+
+            const geo = new THREE.BoxGeometry(width, height, 0.1);
+            const materials = [edgeMat, edgeMat, edgeMat, edgeMat, faceMat, faceMat];
+            const mesh = new THREE.Mesh(geo, materials);
+            
+            // Posiciona um pouco atrás dos botões para servir de fundo
+            mesh.position.set(0, posY, -0.15); 
+            return mesh;
+        }
 
         // ==========================================/
         // SISTEMA DE CENAS E UI 3D (MENUS)
@@ -520,8 +577,91 @@
             return { sprite, ctx, canvas, material: sprite.material };
         }
 
-        const titleSprite = createTextSprite("JUNGLE CHESS 3D", 100, 1024, 256, '#ffeb3b').sprite;
-        titleSprite.position.y = 1.5; menuGroup.add(titleSprite);
+        function createCloseButton(width, height, posY) {
+            const { sprite } = createTextSprite("X", 60, 128, 128, 'white', '#D32F2F');
+            sprite.scale.set(0.5, 0.5, 1);
+            // Puxa o botão sutilmente para dentro (-0.15) para não ficar exageradamente para fora
+            sprite.position.set(width / 2 - 0.15, posY + height / 2 - 0.15, 0.0);
+            sprite.userData = { isMenuBtn: true, action: 'resume_game' };
+            return sprite;
+        }
+
+        // Adicionando os painéis de madeira emoldurando os menus
+        menuGroup.add(createMenuPanel(3.0, 4.0, -0.9));
+        optionsGroup.add(createMenuPanel(3.0, 3.5, 0.0));
+        aboutGroup.add(createMenuPanel(4.5, 4.2, 0.0));
+        multiplayerGroup.add(createMenuPanel(3.0, 3.5, 0.0));
+
+        // Adicionando botão 'X' aos menus para retomar o jogo
+        menuGroup.add(createCloseButton(3.0, 4.0, -0.9));
+        optionsGroup.add(createCloseButton(3.0, 3.5, 0.0));
+        aboutGroup.add(createCloseButton(4.5, 4.2, 0.0));
+        multiplayerGroup.add(createCloseButton(3.0, 3.5, 0.0));
+
+        // --- TÍTULO 3D (JUNGLE CHESS 3D) ---
+        const titleGroup = new THREE.Group();
+        // Título baixado para colar perfeitamente na caixa de madeira
+        titleGroup.position.y = 2.2; 
+        menuGroup.add(titleGroup);
+
+        function createWoodTexture() {
+            const canvas = document.createElement('canvas'); canvas.width = 256; canvas.height = 256;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#8B5A2B'; ctx.fillRect(0, 0, 256, 256);
+            ctx.strokeStyle = '#5C3A21'; ctx.lineWidth = 4;
+            for (let i = 0; i < 15; i++) {
+                ctx.beginPath();
+                ctx.moveTo(0, Math.random() * 256);
+                ctx.bezierCurveTo(85, Math.random() * 256, 170, Math.random() * 256, 256, Math.random() * 256);
+                ctx.stroke();
+            }
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+            return tex;
+        }
+
+        function createStoneTexture() {
+            const canvas = document.createElement('canvas'); canvas.width = 256; canvas.height = 256;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#888888'; ctx.fillRect(0, 0, 256, 256);
+            for (let i = 0; i < 300; i++) {
+                ctx.fillStyle = Math.random() > 0.5 ? '#666666' : '#aaaaaa';
+                ctx.beginPath();
+                ctx.arc(Math.random() * 256, Math.random() * 256, Math.random() * 3 + 1, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+            return tex;
+        }
+
+        const fontLoader = new FontLoader();
+        fontLoader.load('https://cdn.jsdelivr.net/npm/three@0.160.0/examples/fonts/helvetiker_bold.typeface.json', (font) => {
+            const woodMat = new THREE.MeshStandardMaterial({ map: createWoodTexture(), roughness: 0.9 });
+            const stoneMat = new THREE.MeshStandardMaterial({ map: createStoneTexture(), roughness: 0.9, metalness: 0.1 });
+
+            const jcGeo = new TextGeometry('JUNGLE CHESS', {
+                font: font, size: 0.5, height: 0.15, curveSegments: 4,
+                bevelEnabled: true, bevelThickness: 0.02, bevelSize: 0.02, bevelSegments: 3
+            });
+            jcGeo.computeBoundingBox();
+            jcGeo.translate(-0.5 * (jcGeo.boundingBox.max.x - jcGeo.boundingBox.min.x), 0, 0);
+            const jcMesh = new THREE.Mesh(jcGeo, woodMat);
+            jcMesh.position.y = 0.4;
+            
+            const tdGeo = new TextGeometry('3D', {
+                font: font, size: 0.9, height: 0.3, curveSegments: 4,
+                bevelEnabled: true, bevelThickness: 0.04, bevelSize: 0.04, bevelSegments: 3
+            });
+            tdGeo.computeBoundingBox();
+            tdGeo.translate(-0.5 * (tdGeo.boundingBox.max.x - tdGeo.boundingBox.min.x), 0, 0);
+            const tdMesh = new THREE.Mesh(tdGeo, stoneMat);
+            tdMesh.position.y = -0.6;
+
+            titleGroup.add(jcMesh);
+            titleGroup.add(tdMesh);
+        });
+
         const btnSingle = createTextSprite("PVP Local", 50, 512, 128, '#000000', '#6B4226').sprite;
         btnSingle.position.y = 0.5; btnSingle.userData = { isMenuBtn: true, action: 'start_game' }; menuGroup.add(btnSingle);
         const btnMulti = createTextSprite("Multiplayer", 50, 512, 128, '#000000', '#615142').sprite;
@@ -550,7 +690,6 @@
 
         const abtTitle = createTextSprite("SOBRE", 80, 512, 128, '#ffeb3b').sprite;
         abtTitle.position.y = 1.5; aboutGroup.add(abtTitle);
-        // ATUALIZAÇÃO: Adicionada a linha de crédito solicitada e aumentado o canvas para comportar o texto extra
         const abtText = createTextSprite("Jungle Chess 3D\n\nCriado com Three.js / WebXR\nUm clássico 'Dou Shou Qi' nostálgico.\n\nRe-imaginado para 3d moderno por Whithil", 40, 1024, 640, 'white').sprite;
         abtText.position.y = 0.0; aboutGroup.add(abtText);
         const btnAbtBack = createTextSprite("Voltar", 50, 512, 128, '#000000', '#4F4237').sprite;
@@ -558,8 +697,7 @@
 
         function switchScene(newScene) {
             currentScene = newScene;
-            const targetGameY = currentScene === 'game' ? 0 : -2.0;
-            const targetGameScale = currentScene === 'game' ? 1.0 : 0.8;
+            const targetGameY = currentScene === 'game' ? 0 : -3.5;
             
             document.getElementById('ui-container').style.display = currentScene === 'game' ? 'flex' : 'none';
             hudGroup.visible = currentScene === 'game';
@@ -570,13 +708,20 @@
             multiplayerGroup.visible = currentScene === 'multiplayer';
 
             gameGroup.userData.targetY = targetGameY;
-            gameGroup.userData.targetScale = targetGameScale;
 
-            // Animate camera target to keep focus between menu and board
-            const targetControlsY = currentScene === 'game' ? 0 : 0; 
+            // FIX: Reduzido de 1.5 para 0.8 para um enquadramento mais elegante e equilibrado
+            const targetControlsY = currentScene === 'game' ? 0 : 0.8; 
             if (controls.userData) {
                 controls.userData.target.set(0, targetControlsY, 0);
             }
+
+            // Inicia o deslocamento e zoom da câmera para o tabuleiro ou para o menu
+            if (currentScene === 'game') {
+                camera.userData.targetPos.set(0, 6, 6.5); // Ligeiramente mais próximo durante o jogo também
+            } else {
+                camera.userData.targetPos.set(0, 7, 8); // Mais zoom no menu
+            }
+            isTransitioningCamera = true;
         }
 
         // ==========================================/
@@ -585,15 +730,15 @@
         const hudGroup = new THREE.Group();
         camera.add(hudGroup);
 
-        function createHUDButton(text, color) {
-            const { sprite } = createTextSprite(text, 45, 512, 128, 'white', color);
+        function createHUDButton(text, bgColor, textColor = '#000000') {
+            const { sprite } = createTextSprite(text, 45, 512, 128, textColor, bgColor);
             sprite.scale.set(0.8, 0.2, 1);
             sprite.userData = { isHUDButton: true, action: text };
             hudGroup.add(sprite);
             return sprite;
         }
 
-        const menuHudBtn = createHUDButton('☰ MENU', '#9C27B0');
+        const menuHudBtn = createHUDButton('☰ MENU', '#6B4226', '#000000');
 
         function updateHUDPosition() {
             const dist = -2.5; 
@@ -867,6 +1012,7 @@
                 clearHighlights();
                 restarting = true; // Defer piece creation
             }
+            else if (action === 'resume_game') { switchScene('game'); } 
             else if (action === 'show_options') { switchScene('options'); } 
             else if (action === 'show_about') { switchScene('about'); } 
             else if (action === 'show_menu') { switchScene('menu'); } 
@@ -878,7 +1024,7 @@
                 const { canvas, ctx } = btnTipsObj;
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
                 ctx.fillStyle = bgColor;
-                if (ctx.roundRect) ctx.roundRect(10, 10, canvas.width-20, height-20, 30); else ctx.fillRect(10, 10, canvas.width-20, height-20);
+                if (ctx.roundRect) ctx.roundRect(10, 10, canvas.width-20, height-20, 30); else ctx.fillRect(10, 10, canvas.width-20, canvas.height-20);
                 ctx.fill(); ctx.lineWidth = 6; ctx.strokeStyle = '#000000'; ctx.stroke();
                 ctx.fillStyle = '#000000'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
                 ctx.font = 'bold 50px sans-serif'; ctx.fillText(newText, canvas.width/2, canvas.height/2);
@@ -946,6 +1092,7 @@
         const raycaster = new THREE.Raycaster(); const mouse = new THREE.Vector2();
         function onPointerDown(event) {
             initAudio(); 
+            isTransitioningCamera = false; // Permite ao jogador retomar o controle manual da câmera
             if (renderer.xr.isPresenting || event.target.tagName === 'BUTTON') return;
             if (event.touches && event.touches.length > 1) {
                 return;
@@ -980,6 +1127,7 @@
         const initialGameScale = new THREE.Vector3();
 
         function onTouchStart(event) {
+            isTransitioningCamera = false; // Permite ao jogador retomar controle
             if (renderer.xr.isPresenting && event.touches.length === 2) {
                 event.preventDefault();
                 const t1 = event.touches[0];
@@ -1050,6 +1198,7 @@
 
         function onSelectXR(event) {
             initAudio(); const controller = event.target;
+            isTransitioningCamera = false;
             if (controller1Selected && controller2Selected) return;
             if (isARSession && !isARPlaced) {
                 if (reticle.visible) {
@@ -1139,6 +1288,13 @@
 
             if(controls.userData) {
                 controls.target.lerp(controls.userData.target, 4 * delta);
+            }
+
+            if (isTransitioningCamera) {
+                camera.position.lerp(camera.userData.targetPos, 4 * delta);
+                if (camera.position.distanceTo(camera.userData.targetPos) < 0.05) {
+                    isTransitioningCamera = false;
+                }
             }
 
             if (!isPinching && !isZoomingVR) {
