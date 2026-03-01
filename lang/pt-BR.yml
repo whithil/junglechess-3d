@@ -1,0 +1,84 @@
+ui:
+  play_multi: "MULTIPLAYER"
+  play_local: "JOGO LOCAL"
+  options: "OPÇÕES"
+  about: "SOBRE"
+  pvp_local: "PVP Local"
+  vs_cpu: "V.S. CPU"
+  generate_link: "Gerar Link"
+  share_url: "Compartilhe a URL"
+  back: "Voltar"
+  tips_on: "Dicas e Ajuda: ON"
+  tips_off: "Dicas e Ajuda: OFF"
+  enter_vr: "Entrar em VR"
+  enter_ar: "Entrar em AR"
+  about_text: "Jungle Chess 3D\n\nCriado com Three.js / WebXR\nUm clássico 'Dou Shou Qi' nostálgico.\n\nRe-imaginado para 3d moderno por Whithil"
+  restart: "Reiniciar"
+  loading: "Carregando..."
+  connecting: "Conectando..."
+  waiting_p2: "Aguardando Jogador 2"
+  game_over: "Fim de Jogo"
+  win: "Venceu!"
+  draw: "Empate!"
+  turn_green: "Vez do Verde"
+  turn_red: "Vez do Vermelho"
+  turn_p_green: "Vez do Jogador (Verde)"
+  turn_cpu_red: "Vez da CPU (Vermelho)"
+  turn_yours: "Sua Vez!"
+  turn_opp: "Vez do Oponente"
+  win_green: "🏆 VITÓRIA DO VERDE! 🏆"
+  win_red: "🏆 VITÓRIA DO VERMELHO! 🏆"
+  net_p2_joined: "Multiplayer: Jogador 2 Entrou"
+  net_link_copied: "Link Copiado!"
+  net_starting: "Iniciando sala..."
+  net_waiting: "Aguardando oponente entrar..."
+  net_room_open: "Multiplayer: Sala ABERTA"
+  net_connecting: "Conectando ao Host..."
+
+hud:
+  log: "log"
+  chat: "net"
+  manual: "ebook"
+  quick_guide: "Guia Rápido"
+  guide_lines:
+    - "O Alvo: Entre na Toca para vencer!"
+    - "Força: Elefante > Leão > Tigre ... Rato"
+    - "O Segredo: O Rato captura o Elefante!"
+    - "Água: Só o Rato pode entrar no rio."
+    - "Salto: Leão e Tigre saltam sobre rios."
+    - "Armadilha: Força cai a 0 na armadilha!"
+
+dialogues:
+  gossips:
+    1:
+      - "A água é o meu domínio! 💧🐭"
+      - "Elefante {0} que se cuide comigo... 🐘😈"
+      - "Nado melhor que qualquer felino! 🌊🐀"
+    2:
+      - "Miau... Onde anda o ratinho? 🐭{0}❓"
+      - "As árvores são perfeitas para mim. 🌳🐱"
+    3:
+      - "Au au! Protejo a nossa toca! 🐶🛡️"
+      - "Ninguém passa despercebido. ⛺🐕"
+    4:
+      - "Auuu! Caçamos em matilha. 🐺🌙"
+      - "A floresta é a nossa casa. 🌲🐾"
+    5:
+      - "Rápido e letal. 🐆💨"
+      - "Nunca me verão a chegar. 😵‍💫✨"
+    6:
+      - "Rios? Eu salto isso num pulo! 🌊🐅💨"
+      - "Ratos molhados não metem medo. 🙄🐭"
+      - "Garras prontas para o ataque! 🐯⚔️"
+    7:
+      - "O Rei não se molha, ele salta! 🌊🦁💨"
+      - "Todos devem curvar-se. 👑🦁"
+    8:
+      - "Sou o Rei absoluto da selva! 🐘💪"
+      - "Só esse maldito Rato {0} me assusta... 🐭🥶"
+      - "Esmago tudo no meu caminho! 💥🐾"
+  replies:
+    water_threat: "Cai na água para veres se não te afogo! 🌊💀"
+    elephant_fear: "Eek! Fica longe de mim! 🐘💦🏃"
+    rat_threat: "Hehehe... Vou roer os teus pés! 😈🐭"
+    cat_threat: "Sai daí que eu te mostro quem manda! 🥩🐾"

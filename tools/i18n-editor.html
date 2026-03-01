@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jungle Chess 3D - I18N Editor</title>
+    <!-- Use basic styles to keep it clean and self-contained -->
+    <style>
+        :root {
+            --bg-dark: #1e1e1e;
+            --bg-light: #252526;
+            --primary: #c586c0;
+            --text: #d4d4d4;
+            --border: #3c3c3c;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: var(--bg-dark);
+            color: var(--text);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            box-sizing: border-box;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 20px;
+            margin-bottom: 20px;
+        }
+
+        button {
+            background: #0e639c;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+
+        button:hover {
+            background: #1177bb;
+        }
+
+        button.danger {
+            background: #d16969;
+        }
+
+        .main-container {
+            display: flex;
+            flex: 1;
+            gap: 20px;
+            overflow: hidden;
+        }
+
+        .sidebar {
+            width: 250px;
+            background: var(--bg-light);
+            border-right: 1px solid var(--border);
+            padding: 10px;
+            overflow-y: auto;
+        }
+
+        .content {
+            flex: 1;
+            padding: 10px;
+            overflow-y: auto;
+            background: var(--bg-light);
+            border: 1px solid var(--border);
+        }
+
+        ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        li {
+            padding: 8px;
+            cursor: pointer;
+            border-radius: 4px;
+            margin-bottom: 4px;
+        }
+
+        li:hover {
+            background: #37373d;
+        }
+
+        li.active {
+            background: #37373d;
+            border-left: 3px solid var(--primary);
+            font-weight: bold;
+        }
+
+        .field-group {
+            margin-bottom: 15px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        label {
+            margin-bottom: 5px;
+            font-weight: bold;
+            font-size: 0.9em;
+            color: #9cdcfe;
+        }
+
+        input[type="text"],
+        textarea {
+            background: #3c3c3c;
+            border: 1px solid var(--border);
+            color: white;
+            padding: 8px;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+
+        textarea {
+            height: 80px;
+            resize: vertical;
+        }
+
+        .dialogue-card {
+            border: 1px solid var(--border);
+            padding: 10px;
+            margin-bottom: 15px;
+            background: #2d2d2d;
+            border-radius: 4px;
+        }
+
+        .reply-card {
+            margin-left: 20px;
+            border-left: 2px solid var(--primary);
+            padding-left: 10px;
+            margin-top: 10px;
+        }
+
+        h2 {
+            margin-top: 0;
+            color: #4ec9b0;
+        }
+
+        .raw-yaml {
+            width: 100%;
+            height: 400px;
+            font-family: monospace;
+            white-space: pre;
+            background: #1e1e1e;
+        }
+    </style>
+    <!-- js-yaml for parsing and dumping yaml -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"></script>
+</head>
+
+<body>
+
+    <div class="header">
+        <h1>🌍 I18N Editor - Jungle Chess 3D</h1>
+        <div>
+            <input type="file" id="fileInput" accept=".yml,.yaml" style="display: none;"
+                onchange="handleFileUpload(event)">
+            <button onclick="document.getElementById('fileInput').click()">📂 Load YAML</button>
+            <button onclick="exportYaml()" style="background: #4ec9b0; color: black; font-weight: bold;">💾 Export
+                YAML</button>
+        </div>
+    </div>
+
+    <div class="main-container">
+        <div class="sidebar">
+            <h3>Categories</h3>
+            <ul id="categoryList">
+                <li class="active" onclick="switchTab('ui')">UI Elements</li>
+                <li onclick="switchTab('hud')">HUD & Guide</li>
+                <li onclick="switchTab('dialogues')">Dialogues (Animals)</li>
+                <li onclick="switchTab('raw')">Raw YAML</li>
+            </ul>
+        </div>
+
+        <div class="content" id="editorArea">
+            <!-- Dynamic content injected here -->
+        </div>
+    </div>
+
+    <script>
+        let dictionary = {
+            ui: {
+                play_multi: "MULTIPLAYER",
+                play_local: "LOCAL GAME",
+                options: "OPTIONS",
+                about: "ABOUT",
+                pvp_local: "Local PVP",
+                vs_cpu: "V.S. CPU"
+            },
+            hud: {
+                log: "log",
+                chat: "net",
+                manual: "ebook",
+                quick_guide: "Quick Guide",
+                guide_lines: ["Goal: Enter the Den to win!"]
+            },
+            dialogues: {
+                lion: {
+                    greeting: { text: "Roar! I am the king of this jungle.", responses: [{ text: "We shall see about that." }] }
+                }
+            }
+        };
+
+        let currentTab = 'ui';
+
+        function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    dictionary = jsyaml.load(e.target.result);
+                    // Ensure base structure
+                    if (!dictionary.ui) dictionary.ui = {};
+                    if (!dictionary.hud) dictionary.hud = {};
+                    if (!dictionary.dialogues) dictionary.dialogues = {};
+                    renderTab();
+                    alert('YAML loaded successfully!');
+                } catch (err) {
+                    alert('Error parsing YAML: ' + err);
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        function exportYaml() {
+            try {
+                const yamlStr = jsyaml.dump(dictionary);
+                const blob = new Blob([yamlStr], { type: "text/yaml" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'translation.yml';
+                a.click();
+                URL.revokeObjectURL(url);
+            } catch (err) {
+                alert('Error generating YAML: ' + err);
+            }
+        }
+
+        function switchTab(tab) {
+            currentTab = tab;
+            document.querySelectorAll('#categoryList li').forEach(li => li.classList.remove('active'));
+            event.target.classList.add('active');
+            renderTab();
+        }
+
+        function renderTab() {
+            const container = document.getElementById('editorArea');
+            container.innerHTML = '';
+
+            if (currentTab === 'raw') {
+                container.innerHTML = `<h2>Raw YAML View</h2><textarea class="raw-yaml" readonly>${jsyaml.dump(dictionary)}</textarea>`;
+                return;
+            }
+
+            if (currentTab === 'dialogues') {
+                renderDialogues(container);
+                return;
+            }
+
+            const dictSection = dictionary[currentTab] || {};
+            const html = [`<h2>Edit ${currentTab.toUpperCase()} Strings</h2>`];
+
+            for (const [key, value] of Object.entries(dictSection)) {
+                if (Array.isArray(value)) {
+                    html.push(`<div class="field-group"><label>${key} (Array)</label>`);
+                    html.push(`<textarea oninput="updateArray('${currentTab}', '${key}', this.value)">${value.join('\n')}</textarea></div>`);
+                } else if (typeof value === 'object') {
+                    html.push(`<p><i>Nested objects not fully supported in simple view. Use Raw YAML if needed.</i></p>`);
+                } else {
+                    const isMultiline = value.includes('\n');
+                    if (isMultiline) {
+                        html.push(`<div class="field-group"><label>${key}</label><textarea oninput="updateKey('${currentTab}', '${key}', this.value)">${value}</textarea></div>`);
+                    } else {
+                        html.push(`<div class="field-group"><label>${key}</label><input type="text" value="${value}" oninput="updateKey('${currentTab}', '${key}', this.value)"></div>`);
+                    }
+                }
+            }
+
+            html.push(`<br><button onclick="addNewKey('${currentTab}')">+ Add New Key</button>`);
+            container.innerHTML = html.join('');
+        }
+
+        function renderDialogues(container) {
+            let html = `<h2>Animal Dialogues</h2>`;
+
+            for (const [animal, events] of Object.entries(dictionary.dialogues || {})) {
+                html += `<div class="dialogue-card">
+                        <div style="display:flex; justify-content:space-between;">
+                            <h3 style="margin-top:0; color: #dcdcaa;">🐾 ${animal}</h3>
+                            <button class="danger" onclick="deleteAnimal('${animal}')">Delete Animal</button>
+                        </div>`;
+
+                for (const [evtName, evtData] of Object.entries(events)) {
+                    html += `<div class="dialogue-card" style="background:#252526;">
+                            <label>Event: ${evtName}</label>
+                            <input type="text" style="width:100%; margin-bottom:10px;" value="${evtData.text || ''}" oninput="updateDialogue('${animal}', '${evtName}', this.value)">
+                            
+                            <label>Replies/Choices:</label>`;
+
+                    (evtData.responses || []).forEach((resp, idx) => {
+                        html += `<div class="reply-card">
+                                 <input type="text" style="width:80%;" value="${resp.text || ''}" oninput="updateReply('${animal}', '${evtName}', ${idx}, this.value)">
+                                 <button class="danger" onclick="deleteReply('${animal}', '${evtName}', ${idx})">X</button>
+                             </div>`;
+                    });
+
+                    html += `<button style="margin-top:10px; font-size:0.8em;" onclick="addReply('${animal}', '${evtName}')">+ Add Reply</button>
+                        </div>`;
+                }
+
+                html += `<button onclick="addEvent('${animal}')">+ Add Event (e.g., on_capture)</button>
+                     </div>`;
+            }
+
+            html += `<br><button onclick="addAnimal()">+ Add New Animal</button>`;
+            container.innerHTML = html;
+        }
+
+        // Handlers
+        function updateKey(section, key, val) { dictionary[section][key] = val; }
+        function updateArray(section, key, val) { dictionary[section][key] = val.split('\n'); }
+
+        function addNewKey(section) {
+            const key = prompt("New Key Name (e.g. 'title_label'):");
+            if (key && !dictionary[section][key]) {
+                dictionary[section][key] = "New Text";
+                renderTab();
+            }
+        }
+
+        // Dialogue Handlers
+        function updateDialogue(animal, evt, val) { dictionary.dialogues[animal][evt].text = val; }
+        function updateReply(animal, evt, idx, val) { dictionary.dialogues[animal][evt].responses[idx].text = val; }
+
+        function addAnimal() {
+            const animal = prompt("Animal ID (e.g., 'tiger', 'elephant'):");
+            if (animal && !dictionary.dialogues[animal]) {
+                dictionary.dialogues[animal] = { greeting: { text: "Hello", responses: [] } };
+                renderTab();
+            }
+        }
+        function deleteAnimal(animal) {
+            if (confirm(`Delete all dialogues for ${animal}?`)) {
+                delete dictionary.dialogues[animal];
+                renderTab();
+            }
+        }
+
+        function addEvent(animal) {
+            const evt = prompt("Event Name (e.g., 'on_capture', 'on_win'):");
+            if (evt && !dictionary.dialogues[animal][evt]) {
+                dictionary.dialogues[animal][evt] = { text: "...", responses: [] };
+                renderTab();
+            }
+        }
+
+        function addReply(animal, evt) {
+            if (!dictionary.dialogues[animal][evt].responses) dictionary.dialogues[animal][evt].responses = [];
+            dictionary.dialogues[animal][evt].responses.push({ text: "New Reply" });
+            renderTab();
+        }
+        function deleteReply(animal, evt, idx) {
+            dictionary.dialogues[animal][evt].responses.splice(idx, 1);
+            renderTab();
+        }
+
+        // Initialize
+        renderTab();
+    </script>
+</body>
+
+</html>

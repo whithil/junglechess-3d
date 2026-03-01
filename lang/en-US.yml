@@ -1,0 +1,84 @@
+ui:
+  play_multi: "MULTIPLAYER"
+  play_local: "LOCAL GAME"
+  options: "OPTIONS"
+  about: "ABOUT"
+  pvp_local: "Local PVP"
+  vs_cpu: "V.S. CPU"
+  generate_link: "Generate Link"
+  share_url: "Share URL"
+  back: "Back"
+  tips_on: "Tips & Help: ON"
+  tips_off: "Tips & Help: OFF"
+  enter_vr: "Enter VR"
+  enter_ar: "Enter AR"
+  about_text: "Jungle Chess 3D\n\nCreated with Three.js / WebXR\nA nostalgic 'Dou Shou Qi' classic.\n\nRe-imagined for modern 3D by Whithil"
+  restart: "Restart"
+  loading: "Loading..."
+  connecting: "Connecting..."
+  waiting_p2: "Waiting for Player 2"
+  game_over: "Game Over"
+  win: "Wins!"
+  draw: "Draw!"
+  turn_green: "Green's Turn"
+  turn_red: "Red's Turn"
+  turn_p_green: "Player's Turn (Green)"
+  turn_cpu_red: "CPU's Turn (Red)"
+  turn_yours: "Your Turn!"
+  turn_opp: "Opponent's Turn"
+  win_green: "🏆 GREEN WINS! 🏆"
+  win_red: "🏆 RED WINS! 🏆"
+  net_p2_joined: "Multiplayer: Player 2 Joined"
+  net_link_copied: "Link Copied!"
+  net_starting: "Starting Room..."
+  net_waiting: "Waiting for Opponent..."
+  net_room_open: "Multiplayer: Room OPEN"
+  net_connecting: "Connecting to Host..."
+
+hud:
+  log: "log"
+  chat: "net"
+  manual: "ebook"
+  quick_guide: "Quick Guide"
+  guide_lines:
+    - "Goal: Enter the Den to win!"
+    - "Strength: Elephant > Lion > Tiger ... Rat"
+    - "Secret: Rat captures Elephant!"
+    - "Water: Only Rat can enter the river."
+    - "Jump: Lion and Tiger jump over rivers."
+    - "Trap: Strength drops to 0 in trap!"
+
+dialogues:
+  gossips:
+    1:
+      - "The water is my domain! 💧🐭"
+      - "Elephant {0} better watch out... 🐘😈"
+      - "I swim better than any feline! 🌊🐀"
+    2:
+      - "Meow... Where is the little mouse? 🐭{0}❓"
+      - "The trees are perfect for me. 🌳🐱"
+    3:
+      - "Woof! I protect our den! 🐶🛡️"
+      - "No one goes unnoticed. ⛺🐕"
+    4:
+      - "Awooo! We hunt in packs. 🐺🌙"
+      - "The forest is our home. 🌲🐾"
+    5:
+      - "Fast and lethal. 🐆💨"
+      - "They'll never see me coming. 😵‍💫✨"
+    6:
+      - "Rivers? I jump them in one bound! 🌊🐅💨"
+      - "Wet rats don't scare me. 🙄🐭"
+      - "Claws ready for the attack! 🐯⚔️"
+    7:
+      - "The King doesn't get wet, he jumps! 🌊🦁💨"
+      - "All must bow down. 👑🦁"
+    8:
+      - "I am the absolute King of the jungle! 🐘💪"
+      - "Only that damn Rat {0} scares me... 🐭🥶"
+      - "I crush everything in my path! 💥🐾"
+  replies:
+    water_threat: "Fall in the water and see if I don't drown you! 🌊💀"
+    elephant_fear: "Eek! Stay away from me! 🐘💦🏃"
+    rat_threat: "Hehehe... I'll gnaw on your feet! 😈🐭"
+    cat_threat: "Get out of there and I'll show you who's boss! 🥩🐾"

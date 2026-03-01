@@ -1,0 +1,70 @@
+<svg id="hero-logo-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" width="100%" height="auto">
+                    <defs>
+                        <style>
+                            @import url('https://fonts.googleapis.com/css2?family=Titan+One&amp;display=swap');
+                            .game-font { font-family: 'Titan One', sans-serif; text-anchor: middle; font-weight: 900; }
+                            .hero-float-1 { animation: hfloat1 3.5s ease-in-out infinite alternate; }
+                            .hero-float-2 { animation: hfloat2 4s ease-in-out infinite alternate 0.5s; }
+                            .hero-float-3 { animation: hfloat3 3s ease-in-out infinite alternate 1s; }
+                            .hero-sway { transform-origin: center; animation: sway 4s ease-in-out infinite alternate; }
+                            
+                            @keyframes hfloat1 { 0% { transform: translateY(0px) rotate(-1deg); } 100% { transform: translateY(-10px) rotate(1deg); } }
+                            @keyframes hfloat2 { 0% { transform: translateY(0px) rotate(1deg); } 100% { transform: translateY(-8px) rotate(-1deg); } }
+                            @keyframes hfloat3 { 0% { transform: translateY(0px) scale(1); } 100% { transform: translateY(-12px) scale(1.05); } }
+                            @keyframes sway { 0% { transform: rotate(-5deg); } 100% { transform: rotate(5deg); } }
+                        </style>
+
+                        <!-- Gradientes reaproveitados -->
+                        <linearGradient id="h-grad-jungle" x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" stop-color="#bef264"></stop>
+                            <stop offset="100%" stop-color="#65a30d"></stop>
+                        </linearGradient>
+                        <linearGradient id="h-grad-chess" x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" stop-color="#fde047"></stop>
+                            <stop offset="100%" stop-color="#d97706"></stop>
+                        </linearGradient>
+                        <linearGradient id="h-grad-3d" x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" stop-color="#fca5a5"></stop>
+                            <stop offset="100%" stop-color="#dc2626"></stop>
+                        </linearGradient>
+                        <filter id="h-glow" x="-20%" y="-20%" width="140%" height="140%">
+                            <feGaussianBlur stdDeviation="6" result="blur"></feGaussianBlur>
+                            <feComposite in="SourceGraphic" in2="blur" operator="over"></feComposite>
+                        </filter>
+                    </defs>
+
+                    <!-- Elementos de Decoração: Folhas maiores para preencher o banner -->
+                    <g class="hero-sway" transform="translate(100, 225)">
+                        <path d="M -50 -50 Q 80 -10 120 100 Q 20 80 -50 -50 Z" fill="#166534" stroke="#14532d" stroke-width="8" opacity="0.8"></path>
+                        <path d="M -50 -50 Q 50 30 120 100" fill="none" stroke="#14532d" stroke-width="8" opacity="0.8"></path>
+                    </g>
+                    <g class="hero-sway" transform="translate(700, 225) scale(-1, 1)">
+                        <path d="M -50 -50 Q 80 -10 120 100 Q 20 80 -50 -50 Z" fill="#15803d" stroke="#14532d" stroke-width="8" opacity="0.8"></path>
+                        <path d="M -50 -50 Q 50 30 120 100" fill="none" stroke="#14532d" stroke-width="8" opacity="0.8"></path>
+                    </g>
+
+                    <!-- JUNGLE -->
+                    <g class="hero-float-1">
+                        <text x="400" y="140" class="game-font" font-size="110" fill="#022c22" stroke="#022c22" stroke-width="35" stroke-linejoin="round" letter-spacing="3">JUNGLE</text>
+                        <text x="400" y="120" class="game-font" font-size="110" fill="#14532d" stroke="#022c22" stroke-width="35" stroke-linejoin="round" letter-spacing="3">JUNGLE</text>
+                        <text x="400" y="120" class="game-font" font-size="110" fill="url(#h-grad-jungle)" letter-spacing="3">JUNGLE</text>
+                        <text x="400" y="115" class="game-font" font-size="110" fill="#d9f99d" letter-spacing="3" clip-path="inset(0 0 60% 0)">JUNGLE</text>
+                    </g>
+
+                    <!-- CHESS -->
+                    <g class="hero-float-2">
+                        <text x="400" y="290" class="game-font" font-size="140" fill="#451a03" stroke="#451a03" stroke-width="40" stroke-linejoin="round" letter-spacing="6">CHESS</text>
+                        <text x="400" y="265" class="game-font" font-size="140" fill="#78350f" stroke="#451a03" stroke-width="40" stroke-linejoin="round" letter-spacing="6">CHESS</text>
+                        <text x="400" y="265" class="game-font" font-size="140" fill="url(#h-grad-chess)" letter-spacing="6">CHESS</text>
+                        <text x="400" y="258" class="game-font" font-size="140" fill="#fef08a" letter-spacing="6" clip-path="inset(0 0 65% 0)">CHESS</text>
+                    </g>
+
+                    <!-- 3D -->
+                    <g class="hero-float-3" filter="url(#h-glow)">
+                        <text x="400" y="440" class="game-font" font-size="160" fill="#450a0a" stroke="#450a0a" stroke-width="45" stroke-linejoin="round">3D</text>
+                        <text x="400" y="425" class="game-font" font-size="160" fill="#7f1d1d" stroke="#450a0a" stroke-width="45" stroke-linejoin="round">3D</text>
+                        <text x="400" y="410" class="game-font" font-size="160" fill="#b91c1c" stroke="#450a0a" stroke-width="45" stroke-linejoin="round">3D</text>
+                        <text x="400" y="410" class="game-font" font-size="160" fill="url(#h-grad-3d)">3D</text>
+                        <text x="400" y="402" class="game-font" font-size="160" fill="#fecaca" clip-path="inset(0 0 70% 0)">3D</text>
+                    </g>
+                </svg>
