@@ -148,18 +148,18 @@
         <!-- Smartphone Apps Overlay (Gaveta de Cima para Baixo) -->
         <div id="smartphone">
             <div class="phone-tabs">
-                <button class="phone-tab active" onclick="openPhoneTab('tab-log', this)">⚔️ Diário</button>
+                <button class="phone-tab" onclick="openPhoneTab('tab-log', this)">⚔️ Diário</button>
                 <button class="phone-tab" onclick="openPhoneTab('tab-chat', this)">💬 Jungle Net</button>
-                <button class="phone-tab" onclick="openPhoneTab('tab-manual', this)">📖 E-book</button>
+                <button class="phone-tab active" onclick="openPhoneTab('tab-manual', this)">📖 E-book</button>
             </div>
             
-            <div id="tab-log" class="phone-content active"></div>
+            <div id="tab-log" class="phone-content"></div>
             
             <div id="tab-chat" class="phone-content">
                 <div style="text-align: center; color: #888; font-style: italic; margin-bottom: 10px;">Conectando à Jungle Net...</div>
             </div>
             
-            <div id="tab-manual" class="phone-content">
+            <div id="tab-manual" class="phone-content active">
                 <h3 style="margin-top:0; color: #4A2E15;">📖 Guia Rápido</h3>
                 <ul style="padding-left: 20px; margin-bottom: 0;">
                     <li><b>O Alvo:</b> Entre na ⛺ Toca inimiga para vencer!</li>
@@ -181,8 +181,9 @@
 
     <script>
         // Funções UI do Smartphone em Global Scope
-        let lastUserSelectedTabId = 'tab-log';
+        let lastUserSelectedTabId = 'tab-manual'; // Default para E-book
         let isChatAutoOpened = false;
+        let hasLoggedFirstMove = false; // Controle da primeira jogada para transição E-book -> Diário
 
         function togglePhone() {
             const phone = document.getElementById('smartphone');
@@ -231,6 +232,7 @@
                 const tabs = document.querySelectorAll('.phone-tab');
                 let targetBtn = tabs[0]; // default: tab-log
                 if (lastUserSelectedTabId === 'tab-manual') targetBtn = tabs[2];
+                if (lastUserSelectedTabId === 'tab-chat') targetBtn = tabs[1];
                 
                 openPhoneTab(lastUserSelectedTabId, targetBtn, false);
                 isChatAutoOpened = false;
@@ -321,6 +323,17 @@
             }
             const logDiv = document.getElementById('tab-log');
             logDiv.innerHTML = `<div class="log-entry">${logText}</div>` + logDiv.innerHTML;
+
+            // Salta automaticamente para o Diário na primeira jogada
+            if (!window.hasLoggedFirstMove) {
+                window.hasLoggedFirstMove = true;
+                const activeTab = document.querySelector('.phone-content.active');
+                if (activeTab && activeTab.id === 'tab-manual') {
+                    const tabBtnLog = document.querySelectorAll('.phone-tab')[0];
+                    // Passa 'true' para registar que a partir de agora o Diário é o alvo principal do jogador
+                    window.openPhoneTab('tab-log', tabBtnLog, true); 
+                }
+            }
         }
 
         function logChat(pieceData, text, replyTo = null) {
@@ -2106,6 +2119,11 @@
                     clearHighlights();
                     document.getElementById('tab-log').innerHTML = ''; 
                     document.getElementById('tab-chat').innerHTML = '';
+                    
+                    window.hasLoggedFirstMove = false;
+                    const tabBtnManual = document.querySelectorAll('.phone-tab')[2];
+                    window.openPhoneTab('tab-manual', tabBtnManual, false);
+
                     restarting = false;
                 }
             }
@@ -2148,7 +2166,6 @@
                         spawnSpeechBubble(p, finalGossipText);
                         lastGossipTime = time;
                         
-                        // Foca a app no chat automaticamente chamando a função global
                         window.autoOpenChat();
 
                         const replyData = { nickname: getPieceNickname(p), text: finalGossipText };
