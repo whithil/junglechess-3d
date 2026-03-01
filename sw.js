@@ -1,8 +1,13 @@
-const CACHE_NAME = 'jungle-chess-v1';
+const CACHE_NAME = 'jungle-chess-v2';
 const ASSETS_TO_CACHE = [
     './',
     './index.html',
     './title.js',
+    './src/main.js',
+    './src/ui.js',
+    './src/engine.js',
+    './src/audio.js',
+    './src/i18n.js',
     './hero.svg',
     './logo.svg',
     'https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js',

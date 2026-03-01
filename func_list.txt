@@ -1,0 +1,67 @@
+﻿        function togglePhone() {
+        function openPhoneTab(tabId, btn, isManual = true) {
+        function autoOpenChat() {
+        function revertFromAutoChat() {
+        function resetIdleTime() {
+        function handleOrientation(e) {
+        function updateGameTitle(text) {
+        function getChessPos(x, y) {
+        function getPieceNickname(pieceData) {
+        function logBattle(pieceData, startX, startY, endX, endY, capturedPiece) {
+        function showSideQuestFooter() {
+        function logChat(pieceData, text, replyTo = null) {
+        class GameEngine {
+        function initAudio() {
+        function createNoiseBuffer() {
+        function playThump(now, buffer) {
+        function playChurn(now, buffer) {
+        function playSpray(now, buffer) {
+        function playSound(type) {
+        function createBannerClothTexture(team) {
+        function createBanner(team) {
+        function createMenuPanel(width, height, posY) {
+        function createTextSprite(text, fontSize, width, height, color = 'white', bgColor = 'transparent') {
+        function createCloseButton(width, height, posY) {
+        function switchScene(newScene) {
+        function updateStatusText(text) {
+        function fallbackCopyTextToClipboard(text) {
+        function setupP2PConnection() {
+        function initP2PHost() {
+        function initP2PGuest(roomId) {
+        function makeCPUMove() {
+        function makeMonkeyMove() {
+        function createSquareHUDButton(text, bgColor, textColor = '#000000') {
+        function updateHUDPosition() {
+        function createSpeechBubbleTexture(text, pieceData, isOffsetLeft, replyTo = null) {
+        function spawnSpeechBubble(pieceData, text, replyTo = null) {
+        function createWaterTexture() {
+        function createGrassTexture() {
+        function createDenTexture(bgColor) {
+        function getWorldPos(gridX, gridY) { return new THREE.Vector3((gridX - BOARD_COLS / 2 + 0.5) * tileSize, 0, (gridY - BOARD_ROWS / 2 + 0.5) * tileSize); }
+        function createTrapTextTexture() {
+        function createBananaSprite() {
+        function createBananaTimerSprite(turnsLeft) {
+        function createPieceMaterial(rank, team) {
+        function createEmojiSprite(rank) {
+        function spawnCustomParticles(emojis, pos, count = 20) {
+        function spawnVictoryParticles(rank, pos) { spawnCustomParticles(PARTICLE_EMOJIS[rank], pos, 40); }
+        function updatePieceTopNumber(pd, text) {
+        function createRoundedCylinder(radius, height, radialSegments, filletRadius, filletSegments) {
+        function initPieces() {
+        function addHighlightAt(x, y, playerColor) {
+        function showValidMoves(piece) {
+        function clearHighlights() { highlightMesh.visible = false; validHighlightMeshes.forEach(h => gameGroup.remove(h)); validHighlightMeshes.length = 0; }
+        function handleMenuInteraction(obj) {
+        function handleInteraction(intersection) {
+        function executeRemoteMove(startX, startY, endX, endY) {
+        function tryMove(endX, endY, isRemote = false) {
+        function onPointerDown(event) {
+        function onTouchStart(event) {
+        function onTouchMove(event) {
+        function onTouchEnd(event) {
+        function setupVRController(index) {
+        function createLowPolyHandModel() {
+        function onSelectXR(event) {
+        function animate() { renderer.setAnimationLoop(render); }
+        function handleXRInput(delta) {
+        function render(timestamp, frame) {
