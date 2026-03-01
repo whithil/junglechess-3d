@@ -51,8 +51,26 @@ hud:
   side_quest_route_a: "Route A: ???"
   side_quest_route_b: "Route B: ???"
   side_quest_route_c: "Route C: ???"
+  side_quest_route_a_res: "Route A: Macaco-9 woke up furious!"
+  side_quest_route_b_res: "Route B: Truce to return the banana!"
+  side_quest_route_c_res: "Route C: Monkey in next alliance!"
 
 dialogues:
+  monkey_angry_intro: "WHO STOLE MY BANANA?! I WILL DESTROY YOU ALL! 🐒💢"
+  monkey_rage_8: "GIVE IT BACK RIGHT NOW! 🐒😡"
+  monkey_rage_7: "I AM LOSING MY PATIENCE! 🐒😠"
+  monkey_rage_6: "WHERE IS IT?! I KNOW YOU TOOK IT! 🐒😤"
+  monkey_rage_5: "DO YOU THINK THIS IS FUNNY?! 🐒🔥"
+  monkey_rage_4: "HUMPH... WHERE IS IT... 🐒💦"
+  monkey_rage_3: "I'M GETTING TIRED OF THIS! 🐒💨"
+  monkey_rage_2: "THAT WAS MY AFTERNOON SNACK... 🐒😮‍💨"
+  monkey_rage_1: "I JUST WANTED A LITTLE BANANA... 🐒🥺"
+  monkey_calm_down: "OH! MY BANANA! FINALLY! BYE! 🍌🐒❤️"
+  monkey_route_b_truce: "Thank you so much for returning both my bananas! See you in the next match! ✌️🐒🍌🍌"
+  monkey_route_c_promise: "I'll be with the winner in the next match! 🐒⚔️"
+  monkey_pacify_1: "Easy there buddy, nobody took your banana! ✋"
+  monkey_pacify_2: "We're in the middle of a battle! We don't have it. ⚔️"
+  monkey_pacify_3: "Mr. Monkey, please calm down. 😥"
   gossips:
     1:
       - "The water is my domain! 💧🐭"

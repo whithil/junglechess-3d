@@ -51,8 +51,26 @@ hud:
   side_quest_route_a: "Rota A: ???"
   side_quest_route_b: "Rota B: ???"
   side_quest_route_c: "Rota C: ???"
+  side_quest_route_a_res: "Rota A: O Macaco-9 acordou furioso!"
+  side_quest_route_b_res: "Rota B: Trégua para devolver a banana!"
+  side_quest_route_c_res: "Rota C: Macaco na próxima aliança!"
 
 dialogues:
+  monkey_angry_intro: "QUEM ROUBOU MINHA BANANA?! VOU DESTRUIR VOCÊS! 🐒💢"
+  monkey_rage_8: "DEVOLVAM MINHA BANANA AGORA MESMO! 🐒😡"
+  monkey_rage_7: "EU ESTOU PERDENDO A PACIÊNCIA! 🐒😠"
+  monkey_rage_6: "ONDE ELA ESTÁ?! EU SEI QUE VOCÊS PEGARAM! 🐒😤"
+  monkey_rage_5: "VOCÊS ACHAM ISSO ENGRAÇADO?! 🐒🔥"
+  monkey_rage_4: "HUMPF... CADE ELA... 🐒💦"
+  monkey_rage_3: "ESTOU FICANDO CANSADO DISSO! 🐒💨"
+  monkey_rage_2: "AQUELE ERA MEU LANCHE DA TARDE... 🐒😮‍💨"
+  monkey_rage_1: "EU SÓ QUERIA UMA BANANINHA... 🐒🥺"
+  monkey_calm_down: "OPA! MINHA BANANA! FINALMENTE! TCHAU! 🍌🐒❤️"
+  monkey_route_b_truce: "Muito obrigado por devolverem as minhas duas bananas! Estarei na próxima partida de vocês! ✌️🐒🍌🍌"
+  monkey_route_c_promise: "Estarei com o vencedor na próxima partida! 🐒⚔️"
+  monkey_pacify_1: "Calma aí amigão, ninguém pegou sua banana! ✋"
+  monkey_pacify_2: "Nós estamos no meio de uma batalha! Não temos sua banana. ⚔️"
+  monkey_pacify_3: "Senhor macaco, por favor, se acalme. 😥"
   gossips:
     1:
       - "A água é o meu domínio! 💧🐭"
