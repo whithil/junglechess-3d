@@ -2136,7 +2136,7 @@
                     }
                 }
 
-                if (idleTime > 10.0 && (time - lastGossipTime > 8.0) && pendingReplies.length === 0) {
+                if (idleTime > 20.0 && (time - lastGossipTime > 8.0) && pendingReplies.length === 0) {
                     if (alivePieces.length > 0) {
                         const p = alivePieces[Math.floor(Math.random() * alivePieces.length)];
                         const lines = GOSSIP_TEXTS[p.rank];
