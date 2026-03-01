@@ -96,6 +96,10 @@
         let myTeamId = 1; // 1 = Verde (Base), 0 = Vermelho. No PVP local jogamos por ambos.
         let isCPUThinking = false; // Bloqueio enquanto o CPU processa a jogada
         
+        let idleTime = 0;
+        let lastGossipTime = 0;
+        let pendingReplies = []; // Fila para agendar "retrucagens" das peças
+
         // Conexão P2P
         let peer = null;
         let peerConnection = null;
@@ -132,6 +136,45 @@
         const PARTICLE_EMOJIS = {
             1: ['🧀', '🐾', '✨'], 2: ['🐟', '🐾', '✨'], 3: ['🦴', '🐾', '✨'], 4: ['🐺', '🐾', '✨'],
             5: ['🥩', '🐾', '✨'], 6: ['🥩', '🐾', '✨'], 7: ['👑', '🐾', '✨'], 8: ['🥜', '💧', '✨']
+        };
+
+        // Textos com funções dinâmicas para inserir o emoji de cor da equipa inimiga
+        const GOSSIP_TEXTS = {
+            1: [
+                (e) => `A água é o meu domínio! 💧🐭`,
+                (e) => `Elefante ${e} que se cuide comigo... 🐘😈`,
+                (e) => `Nado melhor que qualquer felino! 🌊🐀`
+            ],
+            2: [
+                (e) => `Miau... Onde anda o ratinho? 🐭${e}❓`,
+                (e) => `As árvores são perfeitas para mim. 🌳🐱`
+            ],
+            3: [
+                (e) => `Au au! Protejo a nossa toca! 🐶🛡️`,
+                (e) => `Ninguém passa despercebido. ⛺🐕`
+            ],
+            4: [
+                (e) => `Auuu! Caçamos em matilha. 🐺🌙`,
+                (e) => `A floresta é a nossa casa. 🌲🐾`
+            ],
+            5: [
+                (e) => `Rápido e letal. 🐆💨`,
+                (e) => `Nunca me verão a chegar. 😵‍💫✨`
+            ],
+            6: [
+                (e) => `Rios? Eu salto isso num pulo! 🌊🐅💨`,
+                (e) => `Ratos molhados não metem medo. 🙄🐭`,
+                (e) => `Garras prontas para o ataque! 🐯⚔️`
+            ],
+            7: [
+                (e) => `O Rei não se molha, ele salta! 🌊🦁💨`,
+                (e) => `Todos devem curvar-se. 👑🦁`
+            ],
+            8: [
+                (e) => `Sou o Rei absoluto da selva! 🐘💪`,
+                (e) => `Só esse maldito Rato ${e} me assusta... 🐭🥶`,
+                (e) => `Esmago tudo no meu caminho! 💥🐾`
+            ]
         };
 
         const TEAMS = {
@@ -789,11 +832,10 @@
             updateStatusText("Iniciando sala...");
 
             // 3. Dispara o Compartilhamento Nativo do celular (Web Share API)
-            // Precisa acontecer de forma síncrona com o clique do usuário
             if (navigator.share) {
                 navigator.share({
                     title: 'Jungle Chess 3D',
-                    text: 'Venha jogar Jungle Chess comigo! Clique no link para entrar na minha mesa:',
+                    text: 'Vem jogar Jungle Chess comigo! Clica no link para entrar na minha mesa:',
                     url: link
                 }).catch((error) => console.log('Erro ao compartilhar:', error));
             }
@@ -894,7 +936,6 @@
                 tryMove(chosenMove.x, chosenMove.y);
             } else {
                 // Se as peças da CPU estiverem bloqueadas e presas sem saídas possíveis, passa a vez
-                // Evita que o motor procure jogadas ao infinito travando a CPU
                 engine.currentTurn = 1;
             }
             
@@ -902,7 +943,7 @@
         }
 
         // ==========================================/
-        // HUD ANCORADO NA CÂMARA (Jogabilidade)
+        // HUD ANCORADO NA CÂMARA E BALÕES DE FOFOCA (IM STYLE)
         // ==========================================/
         const hudGroup = new THREE.Group();
         camera.add(hudGroup);
@@ -927,6 +968,160 @@
             menuHudBtn.position.set(rightEdge, topEdge, dist);
         }
         updateHUDPosition();
+
+        let activeDialogues = [];
+
+        // NOVO DESIGN GIGANTE: Estilo App de Mensagens (WhatsApp/iMessage) com âncora dinâmica
+        function createSpeechBubbleTexture(text, pieceData, isOffsetLeft) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 1024; canvas.height = 1024; // Canvas enorme e quadrado para permitir esticar a cauda
+            const ctx = canvas.getContext('2d');
+            
+            const team = pieceData.team;
+            const rank = pieceData.rank;
+            const bgColor = team === 0 ? '#ffebee' : '#e8f5e9'; 
+            const textColor = '#000000';
+            const teamColor = TEAMS[team].color;
+
+            // Nickname Dinâmico: <nome>_<cor>_<poder><player>
+            const pieceName = RANKS[rank].name.toLowerCase();
+            const colorName = team === 0 ? 'red' : 'green';
+            const playerNum = team === 0 ? '2' : '1';
+            const nickname = `${pieceName}_${colorName}_${rank}${playerNum}`;
+            const emoji = RANKS[rank].icon;
+
+            const bubbleW = 800;
+            const bubbleH = 350; // Aumentado para caber o cabeçalho (Avatar + Nickname)
+            const bubbleY = 100; // Margem superior reduzida
+            
+            // Randomiza a bolha para a esquerda ou direita dentro do Canvas gigante
+            const bubbleX = isOffsetLeft ? 60 : (1024 - bubbleW - 60);
+
+            // Sombra moderna
+            ctx.shadowColor = 'rgba(0,0,0,0.3)';
+            ctx.shadowBlur = 15;
+            ctx.shadowOffsetY = 10;
+
+            const r = 40;
+            ctx.fillStyle = bgColor;
+            ctx.beginPath();
+            
+            // Corpo da Bolha
+            ctx.moveTo(bubbleX + r, bubbleY);
+            ctx.lineTo(bubbleX + bubbleW - r, bubbleY);
+            ctx.quadraticCurveTo(bubbleX + bubbleW, bubbleY, bubbleX + bubbleW, bubbleY + r);
+            ctx.lineTo(bubbleX + bubbleW, bubbleY + bubbleH - r);
+            ctx.quadraticCurveTo(bubbleX + bubbleW, bubbleY + bubbleH, bubbleX + bubbleW - r, bubbleY + bubbleH);
+
+            // Cauda Elástica Dinâmica (aponta sempre para a base inferior centro do canvas)
+            const tailBaseX = bubbleX + bubbleW / 2;
+            const tailTargetX = 512; // Exatamente o centro inferior da imagem (que será a âncora na peça)
+            const tailTargetY = 950; 
+            
+            ctx.lineTo(tailBaseX + 40, bubbleY + bubbleH);
+            ctx.quadraticCurveTo(tailBaseX + 10, tailTargetY - 50, tailTargetX, tailTargetY);
+            ctx.quadraticCurveTo(tailBaseX - 30, tailTargetY - 50, tailBaseX - 40, bubbleY + bubbleH);
+
+            ctx.lineTo(bubbleX + r, bubbleY + bubbleH);
+            ctx.quadraticCurveTo(bubbleX, bubbleY + bubbleH, bubbleX, bubbleY + bubbleH - r);
+            ctx.lineTo(bubbleX, bubbleY + r);
+            ctx.quadraticCurveTo(bubbleX, bubbleY, bubbleX + r, bubbleY);
+            ctx.closePath();
+            ctx.fill();
+
+            // Desliga sombra para não borrar os textos e desenhos internos
+            ctx.shadowColor = 'transparent';
+
+            // --- HEADER DA MENSAGEM: Avatar + Nickname ---
+            const avatarX = bubbleX + 70;
+            const avatarY = bubbleY + 70;
+            const avatarRadius = 35;
+            
+            // Fundo Branco do Avatar + Borda 2px (Multiplicada por 2x na escala = 4)
+            ctx.beginPath();
+            ctx.arc(avatarX, avatarY, avatarRadius, 0, Math.PI * 2);
+            ctx.fillStyle = '#ffffff';
+            ctx.fill();
+            ctx.lineWidth = 4;
+            ctx.strokeStyle = teamColor;
+            ctx.stroke();
+
+            // Emoji do Avatar centralizado
+            ctx.font = '45px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(emoji, avatarX, avatarY + 5); // +5 ajuste ótico vertical
+
+            // Nickname (Arroba)
+            ctx.fillStyle = team === 0 ? '#b71c1c' : '#1b5e20'; // Tom mais escuro para ler bem
+            ctx.font = 'bold 30px "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
+            ctx.textAlign = 'left';
+            ctx.fillText(nickname, avatarX + avatarRadius + 15, avatarY);
+
+            // Linha Divisória de UI (separador fino)
+            ctx.beginPath();
+            ctx.moveTo(bubbleX + 30, avatarY + avatarRadius + 15);
+            ctx.lineTo(bubbleX + bubbleW - 30, avatarY + avatarRadius + 15);
+            ctx.strokeStyle = 'rgba(0,0,0,0.08)';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            // ---------------------------------------------
+
+            // --- CORPO DA MENSAGEM ---
+            ctx.fillStyle = textColor;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.font = 'bold 45px "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
+            
+            // Quebra de linha da mensagem
+            const words = text.split(' ');
+            let line = ''; let lines = [];
+            for(let n = 0; n < words.length; n++) {
+                let testLine = line + words[n] + ' ';
+                let metrics = ctx.measureText(testLine);
+                if (metrics.width > bubbleW - 80 && n > 0) {
+                    lines.push(line);
+                    line = words[n] + ' ';
+                } else {
+                    line = testLine;
+                }
+            }
+            lines.push(line);
+            
+            // Cálculo para centralizar o texto apenas no espaço restante abaixo do cabeçalho
+            const headerBottom = avatarY + avatarRadius + 15;
+            const textSpaceH = (bubbleY + bubbleH) - headerBottom;
+            let startY = headerBottom + (textSpaceH / 2) - ((lines.length - 1) * 30);
+            
+            for(let i = 0; i < lines.length; i++) {
+                ctx.fillText(lines[i].trim(), bubbleX + bubbleW/2, startY + (i * 60));
+            }
+
+            return new THREE.CanvasTexture(canvas);
+        }
+
+        function spawnSpeechBubble(pieceData, text) {
+            // Decide se a bolha pende para a esquerda ou direita
+            const isOffsetLeft = Math.random() > 0.5;
+            const tex = createSpeechBubbleTexture(text, pieceData, isOffsetLeft);
+            const mat = new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true });
+            const sprite = new THREE.Sprite(mat);
+            
+            // ÂNCORA MAGICA: 0.5, 0.0 faz com que o y=0 do sprite seja a extremidade inferior do canvas (onde a cauda do balão toca!)
+            sprite.center.set(0.5, 0.0);
+            
+            // Balão super grande e legível de longe
+            sprite.scale.set(3, 3, 1);
+            
+            // Posiciona a base do Sprite exatamente no centro da tampa do cilindro
+            sprite.position.set(0, 0.3, 0); 
+            
+            pieceData.mesh.add(sprite); 
+            
+            // initialY guarda a âncora para a animação de flutuar
+            activeDialogues.push({ sprite, life: 5.5, piece: pieceData, timer: 0, initialY: 0.3 });
+        }
+
 
         // ==========================================/
         // TABULEIRO E MATERIAIS
@@ -1160,9 +1355,51 @@
             for(let x=0; x<BOARD_COLS; x++) {
                 for(let y=0; y<BOARD_ROWS; y++) {
                     if(engine.isValidMove(piece, piece.gridX, piece.gridY, x, y)) {
-                        const hl = new THREE.Mesh(highlightGeo, new THREE.MeshBasicMaterial({color: playerColor, transparent: true, opacity: 0.7}));
+                        
+                        let isThreatened = false;
+                        let threatEmoji = "";
+
+                        if (tipsEnabled && gameMode === 'cpu' && piece.team === engine.currentTurn) {
+                            const originalX = piece.gridX;
+                            const originalY = piece.gridY;
+                            const targetPiece = engine.getPieceAt(x, y);
+
+                            engine.board[originalX][originalY] = null;
+                            engine.board[x][y] = piece;
+                            piece.gridX = x; piece.gridY = y;
+
+                            for (let enemy of pieceMeshes) {
+                                if (enemy.team !== piece.team && !enemy.isDead && enemy.pieceData !== targetPiece) { 
+                                    if (engine.isValidMove(enemy, enemy.gridX, enemy.gridY, x, y)) {
+                                        isThreatened = true;
+                                        threatEmoji = RANKS[enemy.rank].icon;
+                                        break; 
+                                    }
+                                }
+                            }
+
+                            piece.gridX = originalX; piece.gridY = originalY;
+                            engine.board[originalX][originalY] = piece;
+                            engine.board[x][y] = targetPiece;
+                        }
+
+                        let hlColor = isThreatened ? '#D32F2F' : playerColor;
+
+                        const hl = new THREE.Mesh(highlightGeo, new THREE.MeshBasicMaterial({color: hlColor, transparent: true, opacity: 0.7}));
                         const pos = getWorldPos(x, y); hl.position.set(pos.x, 0.15, pos.z);
                         hl.userData = { isTile: true, gridX: x, gridY: y };
+
+                        if (isThreatened) {
+                            const canvas = document.createElement('canvas'); canvas.width = 128; canvas.height = 128;
+                            const ctx = canvas.getContext('2d'); ctx.font = '70px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(threatEmoji, 64, 64);
+                            const planeGeo = new THREE.PlaneGeometry(0.5, 0.5);
+                            const planeMat = new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(canvas), transparent: true, depthWrite: false });
+                            const emojiMesh = new THREE.Mesh(planeGeo, planeMat);
+                            emojiMesh.rotation.x = -Math.PI / 2;
+                            emojiMesh.position.y = 0.02; 
+                            hl.add(emojiMesh);
+                        }
+
                         gameGroup.add(hl); validHighlightMeshes.push(hl);
                     }
                 }
@@ -1234,7 +1471,6 @@
             }
             if (currentScene !== 'game' || engine.winner !== null || isCPUThinking) return;
             
-            // Segurança: Bloqueia interações fora do turno no Multiplayer ou CPU
             if ((gameMode === 'multi' || gameMode === 'cpu') && engine.currentTurn !== myTeamId) return;
 
             if (obj.userData.isPiece) {
@@ -1265,7 +1501,6 @@
                 const startX = selectedPiece.gridX;
                 const startY = selectedPiece.gridY;
                 
-                // MULTIPLAYER SINC: Envia a jogada para o adversário se o movimento foi local
                 if (gameMode === 'multi' && !isRemote && peerConnection && peerConnection.open) {
                     peerConnection.send({ type: 'move', startX, startY, endX, endY });
                 }
@@ -1292,6 +1527,8 @@
         const raycaster = new THREE.Raycaster(); const mouse = new THREE.Vector2();
         function onPointerDown(event) {
             initAudio(); 
+
+            idleTime = 0;
 
             if (!gyroInitialized) {
                 gyroInitialized = true;
@@ -1327,7 +1564,6 @@
                 .filter(hit => {
                     const ud = hit.object.userData; if (!ud) return false;
                     if (currentScene === 'game') {
-                        // Ignora o raycast para a peça atualmente selecionada (efeito "pointer-events: none")
                         if (ud.isPiece && ud.pieceData === selectedPiece) return false;
                         return (ud.isPiece && ud.pieceData && !ud.pieceData.isDead) || ud.isTile || ud.isHUDButton;
                     }
@@ -1344,6 +1580,7 @@
 
         function onTouchStart(event) {
             isTransitioningCamera = false; 
+            idleTime = 0;
             if (renderer.xr.isPresenting && event.touches.length === 2) {
                 event.preventDefault();
                 const t1 = event.touches[0];
@@ -1394,7 +1631,6 @@
         let controller1Selected = false, controller2Selected = false;
         let grip1Active = false, grip2Active = false;
         
-        // Variáveis do sistema de "Esfera Invisível" (6DOF Manipulação VR)
         let isDoubleGripping = false;
         let isSingleGripping = false;
         let activeSingleController = null;
@@ -1418,6 +1654,7 @@
         function onSelectXR(event) {
             initAudio(); const controller = event.target;
             isTransitioningCamera = false;
+            idleTime = 0;
             if (controller1Selected && controller2Selected) return;
             if (isARSession && !isARPlaced) {
                 if (reticle.visible) {
@@ -1443,7 +1680,6 @@
                 .filter(hit => {
                     const ud = hit.object.userData; if (!ud) return false;
                     if (currentScene === 'game') {
-                        // Ignora o raycast para a peça atualmente selecionada no VR também
                         if (ud.isPiece && ud.pieceData === selectedPiece) return false;
                         return (ud.isPiece && ud.pieceData && !ud.pieceData.isDead) || ud.isTile || ud.isHUDButton;
                     }
@@ -1460,19 +1696,19 @@
                 document.getElementById('ar-overlay').style.display = 'block'; 
                 gameGroup.position.set(0, -1000, 0); 
                 isARPlaced = false; 
-                scene.background = null; // Garante que o fundo seja transparente para o Passthrough da Câmera (AR)
+                scene.background = null; 
             }
             else { 
                 gameGroup.position.set(0, 1, -2); 
                 gameGroup.scale.set(0.5, 0.5, 0.5); 
-                scene.background = bgTexture; // Restaura o céu no VR
+                scene.background = bgTexture; 
             }
         });
         renderer.xr.addEventListener('sessionend', () => {
             isARSession = false; hitTestSourceRequested = false; hitTestSource = null;
             document.getElementById('ar-overlay').style.display = 'none';
             gameGroup.position.set(0,0,0); gameGroup.scale.set(1,1,1);
-            scene.background = bgTexture; // Restaura o céu nativo 3D fora do XR
+            scene.background = bgTexture; 
         });
 
         window.addEventListener('resize', () => { 
@@ -1494,19 +1730,17 @@
         function handleXRInput(delta) {
             if (!renderer.xr.isPresenting) return;
         
-            // Manipulação Espacial 6DOF (Esfera Invisível entre os dois Grips)
             if (grip1Active && grip2Active) {
+                idleTime = 0; 
                 if (!isDoubleGripping) {
                     isDoubleGripping = true;
-                    isSingleGripping = false; // Cancela interações de grip único
-                    // Calcula a esfera inicial: Centro (M) e Vetor Diretor (V)
+                    isSingleGripping = false; 
                     initialGripM.addVectors(grip1.position, grip2.position).multiplyScalar(0.5);
                     initialGripV.subVectors(grip2.position, grip1.position);
                     initialGripDist = initialGripV.length();
                     initialGripMatrix.copy(gameGroup.matrix);
                 }
 
-                // Atualizações contínuas no frame corrente
                 const currentM = new THREE.Vector3().addVectors(grip1.position, grip2.position).multiplyScalar(0.5);
                 const currentV = new THREE.Vector3().subVectors(grip2.position, grip1.position);
                 const currentDist = currentV.length();
@@ -1518,8 +1752,6 @@
                         currentV.clone().normalize()
                     );
 
-                    // Constrói a Matriz de Transformação Mágica (Translate * Rotate * Scale * -Translate)
-                    // Aplica as rotações 3D da "Esfera", o centro XYZ e o tamanho/zoom
                     const m = new THREE.Matrix4();
                     m.makeTranslation(currentM.x, currentM.y, currentM.z); 
                     m.multiply(new THREE.Matrix4().makeRotationFromQuaternion(q)); 
@@ -1530,15 +1762,13 @@
                     gameGroup.matrix.copy(m);
                     gameGroup.matrix.decompose(gameGroup.position, gameGroup.quaternion, gameGroup.scale);
                     
-                    // Previne anomalias de escala extrema
                     gameGroup.scale.clampScalar(0.05, 10.0);
                     
-                    // Protege de snap-backs ao soltar a mesa e desativar o modo especial
                     gameGroup.userData.targetScale = gameGroup.scale.x;
                     gameGroup.userData.targetY = gameGroup.position.y;
                 }
             } else if (grip1Active || grip2Active) {
-                // Manipulação simples com um grip apenas (Panning XYZ tradicional)
+                idleTime = 0;
                 if (isDoubleGripping) {
                     isDoubleGripping = false;
                     isSingleGripping = false;
@@ -1559,7 +1789,6 @@
                 isSingleGripping = false;
             }
         
-            // Rotação por Thumbstick aprimorada (Acessando inputsources dinamicamente)
             if (!isDoubleGripping) {
                 const session = renderer.xr.getSession();
                 if (session && session.inputSources) {
@@ -1570,9 +1799,11 @@
                 
                             if (Math.abs(thumbstickX) > 0.1) {
                                 gameGroup.rotation.y -= thumbstickX * delta * 2;
+                                idleTime = 0;
                             }
                             if (Math.abs(thumbstickY) > 0.1) {
                                 gameGroup.rotation.x -= thumbstickY * delta * 2;
+                                idleTime = 0;
                             }
                         }
                     }
@@ -1601,6 +1832,90 @@
                 if (!isAnyPieceMoving) {
                     isCPUThinking = true;
                     setTimeout(makeCPUMove, 1000);
+                }
+            }
+
+            // =====================================
+            // Dica 1: Fofocas Idle das Peças & Respostas (Retrucagens)
+            // =====================================
+            if (currentScene === 'game' && tipsEnabled && engine.winner === null && !restarting) {
+                idleTime += delta;
+                const alivePieces = pieceMeshes.filter(p => !p.isDead && !p.isDying && !p.isMoving && !p.isMorphing && p.trapAnimState === 0);
+                
+                // Dispara Retrucagens Agendadas
+                for (let i = pendingReplies.length - 1; i >= 0; i--) {
+                    const pr = pendingReplies[i];
+                    if (time >= pr.triggerTime) {
+                        if (!pr.piece.isDead && !pr.piece.isDying) {
+                            spawnSpeechBubble(pr.piece, pr.text);
+                            lastGossipTime = time; // Previne que duas peças falem ao mesmo tempo
+                        }
+                        pendingReplies.splice(i, 1);
+                    }
+                }
+
+                // Inicia Conversa Idle
+                if (idleTime > 10.0 && (time - lastGossipTime > 8.0) && pendingReplies.length === 0) {
+                    if (alivePieces.length > 0) {
+                        const p = alivePieces[Math.floor(Math.random() * alivePieces.length)];
+                        const lines = GOSSIP_TEXTS[p.rank];
+                        const textTpl = lines[Math.floor(Math.random() * lines.length)];
+                        
+                        // Emoji contextual para insultar/provocar a equipa oposta
+                        const enemyEmoji = p.team === 0 ? '🟢' : '🔴';
+                        const finalGossipText = textTpl(enemyEmoji);
+                        
+                        spawnSpeechBubble(p, finalGossipText);
+                        lastGossipTime = time;
+
+                        // Lógica de Gatilho para Respostas Dinâmicas
+                        if (finalGossipText.includes('salto') || finalGossipText.includes('salta')) {
+                            // Tigre/Leão fala de saltar rios -> Rato reage
+                            const enemyRat = alivePieces.find(ep => ep.rank === 1 && ep.team !== p.team);
+                            if (enemyRat) {
+                                pendingReplies.push({ piece: enemyRat, text: `Cai na água para veres se não te afogo! 🌊💀`, triggerTime: time + 3.0 });
+                            }
+                        } else if (finalGossipText.includes('Elefante')) {
+                            // Rato ameaça Elefante -> Elefante entra em pânico
+                            const enemyElephant = alivePieces.find(ep => ep.rank === 8 && ep.team !== p.team);
+                            if (enemyElephant) {
+                                pendingReplies.push({ piece: enemyElephant, text: `Eek! Fica longe de mim! 🐘💦🏃`, triggerTime: time + 3.0 });
+                            }
+                        } else if (finalGossipText.includes('Rato') && p.rank === 8) {
+                            // Elefante fala de medo do Rato -> Rato ameaça-o
+                            const enemyRat = alivePieces.find(ep => ep.rank === 1 && ep.team !== p.team);
+                            if (enemyRat) {
+                                pendingReplies.push({ piece: enemyRat, text: `Hehehe... Vou roer os teus pés! 😈🐭`, triggerTime: time + 3.0 });
+                            }
+                        } else if (finalGossipText.includes('nado melhor') || finalGossipText.includes('domínio')) {
+                            // Rato gaba-se da água -> Gatos respondem
+                            const enemyCat = alivePieces.find(ep => (ep.rank === 6 || ep.rank === 7) && ep.team !== p.team);
+                            if (enemyCat) {
+                                pendingReplies.push({ piece: enemyCat, text: `Sai daí que eu te mostro quem manda! 🥩🐾`, triggerTime: time + 3.0 });
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Animador de Balões Moderno (Paira gentilmente e flutua ao morrer)
+            for(let i = activeDialogues.length - 1; i >= 0; i--) {
+                const d = activeDialogues[i];
+                d.life -= delta;
+                d.timer += delta;
+                
+                // Hover suave usando uma onda Seno
+                d.sprite.position.y = d.initialY + Math.sin(d.timer * 4) * 0.05;
+
+                // Fading e flutuação ao morrer
+                if (d.life < 1.0) {
+                    d.sprite.position.y += (1.0 - d.life) * 0.1; // Flutua subtilmente no fim
+                    d.sprite.material.opacity = d.life;
+                }
+
+                if (d.life <= 0) {
+                    d.piece.mesh.remove(d.sprite);
+                    activeDialogues.splice(i, 1);
                 }
             }
 
@@ -1748,8 +2063,6 @@
                         pd.isDying = false;
                         pd.isDead = true;
                         
-                        // FIX: Limpar todas as flags de animação fantasma da peça morta 
-                        // para não causar soft-lock infinito no ciclo da Inteligência Artificial
                         pd.isMorphing = false;
                         pd.isBigAnim = false;
                         pd.squashTimer = 0;
