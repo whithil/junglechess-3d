@@ -47,6 +47,10 @@ hud:
     - "Água: Só o Rato pode entrar no rio."
     - "Salto: Leão e Tigre saltam sobre rios."
     - "Armadilha: Força cai a 0 na armadilha!"
+  side_quest_title: '"Side"-quest 🍌?'
+  side_quest_route_a: "Rota A: ???"
+  side_quest_route_b: "Rota B: ???"
+  side_quest_route_c: "Rota C: ???"
 
 dialogues:
   gossips:

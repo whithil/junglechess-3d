@@ -430,7 +430,11 @@
 
         function getChessPos(x, y) {
             const letters = ['A', 'B', 'C', 'D', 'E', 'F', 'G'];
-            return letters[x] + (y + 1);
+            let col;
+            if (x === -1) col = '-A';
+            else if (x === 7) col = 'H';
+            else col = letters[x] || '?';
+            return col + ':' + (y + 1);
         }
 
         function getPieceNickname(pieceData) {
@@ -451,7 +455,11 @@
                 logText = `<span style="color:${teamColor}; font-weight:bold;">${emoji} ${from} ⚔️ ${capEmoji} ${to}</span>`;
             }
             const logDiv = document.getElementById('tab-log');
-            logDiv.innerHTML = `<div class="log-entry">${logText}</div>` + logDiv.innerHTML;
+            const footer = document.getElementById('side-quest-footer');
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            entry.innerHTML = logText;
+            logDiv.insertBefore(entry, logDiv.firstChild);
 
             // Salta automaticamente para o Diário na primeira jogada
             if (!window.hasLoggedFirstMove) {
@@ -463,6 +471,23 @@
                     window.openPhoneTab('tab-log', tabBtnLog, true);
                 }
             }
+            if (window.updateVRPhoneScreen) window.updateVRPhoneScreen();
+        }
+
+        function showSideQuestFooter() {
+            const logDiv = document.getElementById('tab-log');
+            let footer = document.getElementById('side-quest-footer');
+            if (footer) return; // Already visible
+            footer = document.createElement('div');
+            footer.id = 'side-quest-footer';
+            footer.style.cssText = 'position: sticky; bottom: 0; background: linear-gradient(135deg, #2d1b0e, #4a2e15); border: 2px solid #FFD700; border-radius: 8px; padding: 8px 10px; margin: 8px 4px; color: #FFD700; font-size: 12px; font-family: monospace;';
+            footer.innerHTML = `
+                <div style="font-weight: bold; font-size: 13px; margin-bottom: 4px;">${window.i18n('hud.side_quest_title')}</div>
+                <div style="color: #ccc;">${window.i18n('hud.side_quest_route_a')}</div>
+                <div style="color: #ccc;">${window.i18n('hud.side_quest_route_b')}</div>
+                <div style="color: #ccc;">${window.i18n('hud.side_quest_route_c')}</div>
+            `;
+            logDiv.appendChild(footer);
             if (window.updateVRPhoneScreen) window.updateVRPhoneScreen();
         }
 
@@ -1865,6 +1890,7 @@
             secretTileLeft.visible = false; secretTileRight.visible = false;
             bananaLeft.visible = false; bananaRight.visible = false;
             bananaTimerSprites.forEach((s, i) => { if (s) { gameGroup.remove(s); bananaTimerSprites[i] = null; } });
+            document.getElementById('side-quest-footer')?.remove();
 
             INITIAL_SETUP.forEach(setup => {
                 const pos = getWorldPos(setup.x, setup.y);
@@ -2120,6 +2146,7 @@
                     const denPos = getWorldPos(3, selectedPiece.team === 0 ? 0 : 8);
 
                     // Timer sprite will be created in Phase 5 when it actually activates
+                    showSideQuestFooter();
 
                     selectedPiece.easterEggAnim = {
                         phase: 0, // 0=move to tile, 1=banana flies, 2=tile breaks+fall, 3=fall to abyss, 4=fall from sky
@@ -3160,30 +3187,30 @@
                             playSound('glass_break');
                             spawnCustomParticles(['💎', '✨', '💫', '🔷', '❄️'], anim.tileWorldPos, 25);
                             anim.tileMesh.visible = false;
+                            // Spawn ❓ above piece — EXACT same pattern as glass break particles above
+                            const qCanvas = document.createElement('canvas'); qCanvas.width = 128; qCanvas.height = 128;
+                            const qCtx = qCanvas.getContext('2d'); qCtx.font = '60px sans-serif'; qCtx.textAlign = 'center'; qCtx.textBaseline = 'middle'; qCtx.fillText('❓', 64, 64);
+                            anim.questionSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(qCanvas), transparent: true, opacity: 1 }));
+                            anim.questionSprite.position.copy(anim.tileWorldPos);
+                            anim.questionSprite.position.y = 1.5;
+                            anim.questionSprite.scale.set(0.5, 0.5, 1);
+                            gameGroup.add(anim.questionSprite);
                         }
                         return;
                     } else if (anim.phase === 2) {
-                        // Phase 2: Coyote time! Piece hovers confused before falling
-                        if (anim.timer < 0.01) {
-                            // Spawn ❓ emoji above the piece
-                            const qCanvas = document.createElement('canvas'); qCanvas.width = 128; qCanvas.height = 128;
-                            const qCtx = qCanvas.getContext('2d'); qCtx.font = '80px sans-serif'; qCtx.textAlign = 'center'; qCtx.textBaseline = 'middle'; qCtx.fillText('❓', 64, 64);
-                            anim.questionSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(qCanvas), transparent: true }));
-                            anim.questionSprite.scale.set(0, 0, 1);
-                            anim.questionSprite.position.set(0, 1.2, 0);
-                            pd.mesh.add(anim.questionSprite);
-                        }
-                        // Grow ❓ with pop-in
+                        // Phase 2: Coyote time — ❓ hovers, piece wobbles confused
                         if (anim.questionSprite) {
-                            const popScale = Math.min(1.0, anim.timer * 4);
-                            const bounce = popScale < 1.0 ? popScale : 1.0 + Math.sin(anim.timer * 8) * 0.1;
-                            anim.questionSprite.scale.set(bounce, bounce, 1);
+                            // Bob up and down
+                            anim.questionSprite.position.y = 1.5 + Math.sin(time * 6) * 0.15;
+                            // Gentle scale pulse
+                            const pulse = 1.0 + Math.sin(time * 4) * 0.15;
+                            anim.questionSprite.scale.set(pulse, pulse, 1);
                         }
-                        // Subtle confused wobble
+                        // Subtle confused wobble on the piece
                         pd.mesh.rotation.z = Math.sin(anim.timer * 12) * 0.1;
                         if (anim.timer > 2.0) {
-                            // Remove ❓ and start falling
-                            if (anim.questionSprite) { pd.mesh.remove(anim.questionSprite); anim.questionSprite = null; }
+                            // Remove ❓
+                            if (anim.questionSprite) { gameGroup.remove(anim.questionSprite); anim.questionSprite = null; }
                             pd.mesh.rotation.z = 0;
                             anim.phase = 3; anim.timer = 0;
                             playSound('fall');

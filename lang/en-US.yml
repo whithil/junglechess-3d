@@ -47,6 +47,10 @@ hud:
     - "Water: Only Rat can enter the river."
     - "Jump: Lion and Tiger jump over rivers."
     - "Trap: Strength drops to 0 in trap!"
+  side_quest_title: '"Side"-quest 🍌?'
+  side_quest_route_a: "Route A: ???"
+  side_quest_route_b: "Route B: ???"
+  side_quest_route_c: "Route C: ???"
 
 dialogues:
   gossips:
