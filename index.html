@@ -539,16 +539,36 @@
                 this.pieces = [];
                 this.currentTurn = 1;
                 this.winner = null;
+                // Easter Egg
+                this.secretTileLeftActive = false;
+                this.secretTileRightActive = false;
+                this.secretPieceLeft = null;
+                this.secretPieceRight = null;
             }
-            addPiece(piece) { this.board[piece.gridX][piece.gridY] = piece; this.pieces.push(piece); }
-            getPieceAt(x, y) { if (x < 0 || x >= BOARD_COLS || y < 0 || y >= BOARD_ROWS) return null; return this.board[x][y]; }
+            addPiece(piece) {
+                if (piece.gridX === -1 && piece.gridY === 4) this.secretPieceLeft = piece;
+                else if (piece.gridX === 7 && piece.gridY === 4) this.secretPieceRight = piece;
+                else this.board[piece.gridX][piece.gridY] = piece;
+                this.pieces.push(piece);
+            }
+            getPieceAt(x, y) {
+                if (x === -1 && y === 4) return this.secretPieceLeft;
+                if (x === 7 && y === 4) return this.secretPieceRight;
+                if (x < 0 || x >= BOARD_COLS || y < 0 || y >= BOARD_ROWS) return null;
+                return this.board[x][y];
+            }
             isWater(x, y) { return WATER_TILES.some(w => w.x === x && w.y === y); }
             isTrap(x, y, team) { return TRAPS.some(t => t.x === x && t.y === y && t.team === team); }
             isDen(x, y, team) { return DENS.some(d => d.x === x && d.y === y && d.team === team); }
 
             isValidMove(piece, startX, startY, endX, endY) {
                 if (this.winner !== null) return false;
-                if (endX < 0 || endX >= BOARD_COLS || endY < 0 || endY >= BOARD_ROWS) return false;
+
+                const isLeftSecret = (endX === -1 && endY === 4 && this.secretTileLeftActive);
+                const isRightSecret = (endX === 7 && endY === 4 && this.secretTileRightActive);
+                if (!isLeftSecret && !isRightSecret) {
+                    if (endX < 0 || endX >= BOARD_COLS || endY < 0 || endY >= BOARD_ROWS) return false;
+                }
                 if (startX === endX && startY === endY) return false;
                 if (this.isDen(endX, endY, piece.team)) return false;
 
@@ -605,14 +625,25 @@
                 const startY = piece.gridY;
                 const targetPiece = this.getPieceAt(endX, endY);
                 let captured = null;
-                this.board[startX][startY] = null;
+
+                if (startX === -1 && startY === 4) this.secretPieceLeft = null;
+                else if (startX === 7 && startY === 4) this.secretPieceRight = null;
+                else this.board[startX][startY] = null;
+
                 if (targetPiece) {
                     captured = targetPiece;
                     this.pieces = this.pieces.filter(p => p !== targetPiece);
                 }
                 piece.gridX = endX;
                 piece.gridY = endY;
-                this.board[endX][endY] = piece;
+
+                if (endX === -1 && endY === 4) this.secretPieceLeft = piece;
+                else if (endX === 7 && endY === 4) this.secretPieceRight = piece;
+                else this.board[endX][endY] = piece;
+
+                // Easter egg activation
+                if (endX === 0 && endY === 4) this.secretTileLeftActive = true;
+                if (endX === 6 && endY === 4) this.secretTileRightActive = true;
                 const enemyTeam = piece.team === 0 ? 1 : 0;
                 if (this.isDen(endX, endY, enemyTeam) || this.pieces.filter(p => p.team === enemyTeam).length === 0) {
                     this.winner = piece.team;
@@ -1607,6 +1638,22 @@
         border.position.y = -0.35; border.receiveShadow = true; gameGroup.add(border);
 
         // ==========================================/
+        // EASTER EGG: Secret Glass Tiles
+        // ==========================================/
+        const secretTileGeo = new THREE.BoxGeometry(tileSize - tileSpacing, 0.2, tileSize - tileSpacing);
+        const secretTileMat = new THREE.MeshStandardMaterial({ color: 0x88ffff, transparent: true, opacity: 0.3, roughness: 0.1, metalness: 0.8 });
+
+        const secretTileLeft = new THREE.Mesh(secretTileGeo, secretTileMat);
+        const posLeft = getWorldPos(-1, 4); secretTileLeft.position.copy(posLeft);
+        secretTileLeft.visible = false; secretTileLeft.userData = { isTile: true, gridX: -1, gridY: 4 };
+        gameGroup.add(secretTileLeft); tileMeshes.push(secretTileLeft);
+
+        const secretTileRight = new THREE.Mesh(secretTileGeo, secretTileMat);
+        const posRight = getWorldPos(7, 4); secretTileRight.position.copy(posRight);
+        secretTileRight.visible = false; secretTileRight.userData = { isTile: true, gridX: 7, gridY: 4 };
+        gameGroup.add(secretTileRight); tileMeshes.push(secretTileRight);
+
+        // ==========================================/
         // CILINDRO ARREDONDADO E MATERIAL "MASSINHA"
         // ==========================================/
         function createPieceMaterial(rank, team) {
@@ -1916,6 +1963,16 @@
                 const isRat = selectedPiece.rank === 1;
                 const captured = engine.executeMove(selectedPiece, endX, endY);
                 const targetWorld = getWorldPos(endX, endY);
+
+                // Easter egg visual activation
+                if (engine.secretTileLeftActive && !secretTileLeft.visible) {
+                    secretTileLeft.visible = true;
+                    playSound('beep-up');
+                }
+                if (engine.secretTileRightActive && !secretTileRight.visible) {
+                    secretTileRight.visible = true;
+                    playSound('beep-up');
+                }
 
                 const startIsWater = engine.isWater(startX, startY);
                 const endIsWater = engine.isWater(endX, endY);
