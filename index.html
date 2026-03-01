@@ -41,6 +41,81 @@
             gap: 10px;
             pointer-events: auto;
         }
+
+        /* --- Estilos do Smartphone Drawer (Apps) --- */
+        #smartphone {
+            position: absolute;
+            top: 0; 
+            left: 20px;
+            width: 320px;
+            height: 450px;
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(10px);
+            border: 2px solid #6B4226;
+            border-top: none; 
+            border-radius: 0 0 15px 15px; 
+            display: flex;
+            flex-direction: column;
+            pointer-events: auto;
+            transition: transform 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            z-index: 100;
+        }
+        #smartphone.closed {
+            transform: translateY(calc(-100% + 44px));
+        }
+        #phone-header {
+            background: #6B4226;
+            color: white;
+            padding: 10px;
+            text-align: center;
+            font-weight: bold;
+            cursor: pointer;
+            user-select: none;
+            border-radius: 0 0 13px 13px; 
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .phone-tabs {
+            display: flex;
+            background: #4A2E15;
+        }
+        .phone-tab {
+            flex: 1;
+            padding: 8px 0;
+            background: none;
+            border: none;
+            color: #ccc;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: bold;
+        }
+        .phone-tab.active {
+            color: white;
+            border-bottom: 3px solid #ffeb3b;
+            background: rgba(255,255,255,0.1);
+        }
+        .phone-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+            display: none;
+            background: rgba(255,255,255,0.5);
+            font-size: 14px;
+            color: #333;
+        }
+        .phone-content.active {
+            display: block;
+        }
+        .log-entry { margin-bottom: 6px; padding-bottom: 6px; border-bottom: 1px solid rgba(0,0,0,0.1); }
+        .chat-entry { margin-bottom: 10px; background: white; padding: 8px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.05);}
+        
+        @media (max-width: 600px) {
+            #smartphone { width: calc(100% - 40px); height: 350px; }
+        }
+        /* ------------------------------------------- */
+
         #ar-overlay {
             position: absolute;
             top: 50%; left: 50%;
@@ -53,9 +128,7 @@
             display: none;
         }
     </style>
-    <!-- PeerJS para Multiplayer WebRTC P2P descentralizado -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.2/peerjs.min.js"></script>
-    <!-- Import Maps para Three.js -->
     <script type="importmap">
         {
             "imports": {
@@ -71,9 +144,99 @@
             <h1 id="gameTitle">Jungle Chess 3D</h1>
             <div id="status">Vez do Jogador Verde</div>
         </div>
-        <div id="controls"></div>
+        
+        <!-- Smartphone Apps Overlay (Gaveta de Cima para Baixo) -->
+        <div id="smartphone">
+            <div class="phone-tabs">
+                <button class="phone-tab active" onclick="openPhoneTab('tab-log', this)">⚔️ Diário</button>
+                <button class="phone-tab" onclick="openPhoneTab('tab-chat', this)">💬 Jungle Net</button>
+                <button class="phone-tab" onclick="openPhoneTab('tab-manual', this)">📖 E-book</button>
+            </div>
+            
+            <div id="tab-log" class="phone-content active"></div>
+            
+            <div id="tab-chat" class="phone-content">
+                <div style="text-align: center; color: #888; font-style: italic; margin-bottom: 10px;">Conectando à Jungle Net...</div>
+            </div>
+            
+            <div id="tab-manual" class="phone-content">
+                <h3 style="margin-top:0; color: #4A2E15;">📖 Guia Rápido</h3>
+                <ul style="padding-left: 20px; margin-bottom: 0;">
+                    <li><b>O Alvo:</b> Entre na ⛺ Toca inimiga para vencer!</li>
+                    <li><b>Força:</b> 🐘>🦁>🐯>🐆>🐺>🐶>🐱>🐭. O maior ganha.</li>
+                    <li><b>O Segredo:</b> O minúsculo 🐭 captura o gigante 🐘!</li>
+                    <li><b>Água 🌊:</b> Só o 🐭 entra no rio.</li>
+                    <li><b>Salto 💨:</b> 🦁 e 🐯 saltam por cima dos rios (se não houver rato no caminho).</li>
+                    <li><b>Armadilha 🪤:</b> Inimigos na sua armadilha viram força 0! Mate-os com qualquer peça.</li>
+                </ul>
+            </div>
+            
+            <div id="phone-header" onclick="togglePhone()">
+                <span>📱 Apps da Selva</span>
+                <span id="phone-toggle-icon">▲</span>
+            </div>
+        </div>
     </div>
     <div id="ar-overlay">Toque na tela para posicionar o tabuleiro</div>
+
+    <script>
+        // Funções UI do Smartphone em Global Scope
+        let lastUserSelectedTabId = 'tab-log';
+        let isChatAutoOpened = false;
+
+        function togglePhone() {
+            const phone = document.getElementById('smartphone');
+            const icon = document.getElementById('phone-toggle-icon');
+            if (phone.classList.contains('closed')) {
+                phone.classList.remove('closed');
+                icon.innerText = '▲'; 
+            } else {
+                phone.classList.add('closed');
+                icon.innerText = '▼'; 
+            }
+        }
+
+        // Adicionado parâmetro isManual para rastrear o histórico do usuário
+        function openPhoneTab(tabId, btn, isManual = true) {
+            document.querySelectorAll('.phone-content').forEach(c => c.classList.remove('active'));
+            document.querySelectorAll('.phone-tab').forEach(b => b.classList.remove('active'));
+            document.getElementById(tabId).classList.add('active');
+            btn.classList.add('active');
+
+            if (isManual) {
+                lastUserSelectedTabId = tabId;
+                isChatAutoOpened = false; // Usuário tomou controle manual
+            }
+        }
+
+        // Força a aba do Chat a abrir automaticamente
+        function autoOpenChat() {
+            const activeTab = document.querySelector('.phone-content.active');
+            if (activeTab && activeTab.id !== 'tab-chat') {
+                const tabBtnChat = document.querySelectorAll('.phone-tab')[1];
+                openPhoneTab('tab-chat', tabBtnChat, false);
+                isChatAutoOpened = true; // Marca que foi aberto pelo sistema
+            }
+            
+            const phone = document.getElementById('smartphone');
+            if (phone.classList.contains('closed')) {
+                phone.classList.remove('closed');
+                document.getElementById('phone-toggle-icon').innerText = '▲';
+            }
+        }
+
+        // Reverte para a aba que o usuário estava usando antes
+        function revertFromAutoChat() {
+            if (isChatAutoOpened) {
+                const tabs = document.querySelectorAll('.phone-tab');
+                let targetBtn = tabs[0]; // default: tab-log
+                if (lastUserSelectedTabId === 'tab-manual') targetBtn = tabs[2];
+                
+                openPhoneTab(lastUserSelectedTabId, targetBtn, false);
+                isChatAutoOpened = false;
+            }
+        }
+    </script>
 
     <script type="module">
         import * as THREE from 'three';
@@ -91,21 +254,28 @@
         let tipsEnabled = true;
         let restarting = false; 
         let isTransitioningCamera = false; 
+        let hasGameStarted = false; 
         
-        let gameMode = 'pvp'; // 'pvp', 'cpu', 'multi'
-        let myTeamId = 1; // 1 = Verde (Base), 0 = Vermelho. No PVP local jogamos por ambos.
-        let isCPUThinking = false; // Bloqueio enquanto o CPU processa a jogada
+        let gameMode = 'pvp'; 
+        let myTeamId = 1; 
+        let isCPUThinking = false; 
         
         let idleTime = 0;
         let lastGossipTime = 0;
-        let pendingReplies = []; // Fila para agendar "retrucagens" das peças
+        let pendingReplies = []; 
 
-        // Conexão P2P
+        const closeButtons = []; 
+
+        // Função universal para resetar o tempo ocioso e devolver o telefone à aba original
+        function resetIdleTime() {
+            idleTime = 0;
+            if (window.revertFromAutoChat) window.revertFromAutoChat();
+        }
+
         let peer = null;
         let peerConnection = null;
         let isHost = true;
 
-        // Variáveis para paralaxe com Giroscópio
         let gyroInitialized = false;
         const targetGyroOffset = new THREE.Vector2(0, 0);
         const currentGyroOffset = new THREE.Vector2(0, 0);
@@ -120,9 +290,63 @@
             targetGyroOffset.y = (tiltY / 30) * 0.6;
         }
 
-        // Função utilitária para atualizar o título dinâmico na HUD
+        // ==========================================/
+        // FUNÇÕES DA UI DO SMARTPHONE & CHAT LOG
+        // ==========================================/
         function updateGameTitle(text) {
             document.getElementById('gameTitle').innerText = text;
+        }
+
+        function getChessPos(x, y) {
+            const letters = ['A', 'B', 'C', 'D', 'E', 'F', 'G'];
+            return letters[x] + (y + 1);
+        }
+
+        function getPieceNickname(pieceData) {
+            const pieceName = RANKS[pieceData.rank].name.toLowerCase();
+            const colorName = pieceData.team === 0 ? 'red' : 'green';
+            const playerNum = pieceData.team === 0 ? '2' : '1';
+            return `${pieceName}_${colorName}_${pieceData.rank}${playerNum}`;
+        }
+
+        function logBattle(pieceData, startX, startY, endX, endY, capturedPiece) {
+            const from = getChessPos(startX, startY);
+            const to = getChessPos(endX, endY);
+            const emoji = RANKS[pieceData.rank].icon;
+            const teamColor = TEAMS[pieceData.team].color;
+            let logText = `<span style="color:${teamColor}; font-weight:bold;">${emoji} ${from} ➔ ${to}</span>`;
+            if (capturedPiece) {
+                const capEmoji = RANKS[capturedPiece.rank].icon;
+                logText = `<span style="color:${teamColor}; font-weight:bold;">${emoji} ${from} ⚔️ ${capEmoji} ${to}</span>`;
+            }
+            const logDiv = document.getElementById('tab-log');
+            logDiv.innerHTML = `<div class="log-entry">${logText}</div>` + logDiv.innerHTML;
+        }
+
+        function logChat(pieceData, text, replyTo = null) {
+            const nickname = getPieceNickname(pieceData);
+            const teamColor = TEAMS[pieceData.team].color;
+            const emoji = RANKS[pieceData.rank].icon;
+            const chatDiv = document.getElementById('tab-chat');
+            
+            let replyHTML = '';
+            if (replyTo) {
+                replyHTML = `
+                <div style="background: rgba(0,0,0,0.05); border-left: 4px solid ${teamColor}; margin: 2px 0 4px 0; padding: 4px 8px; border-radius: 4px; font-size: 12px; color: #555; line-height: 1.3;">
+                    <b style="color: #333;">Replying to @${replyTo.nickname}</b><br>
+                    <i>"${replyTo.text}"</i>
+                </div>`;
+            }
+            
+            const entryHTML = `
+                <div class="chat-entry">
+                    <div style="color:${teamColor}; font-weight:bold; margin-bottom: 2px; font-size: 13px;">${emoji} @${nickname}</div>
+                    ${replyHTML}
+                    <div style="color:#222; font-weight: 500; font-size: 14px;">${text}</div>
+                </div>
+            `;
+            
+            chatDiv.innerHTML = entryHTML + chatDiv.innerHTML;
         }
 
         // ==========================================/
@@ -138,7 +362,6 @@
             5: ['🥩', '🐾', '✨'], 6: ['🥩', '🐾', '✨'], 7: ['👑', '🐾', '✨'], 8: ['🥜', '💧', '✨']
         };
 
-        // Textos com funções dinâmicas para inserir o emoji de cor da equipa inimiga
         const GOSSIP_TEXTS = {
             1: [
                 (e) => `A água é o meu domínio! 💧🐭`,
@@ -287,6 +510,9 @@
                     this.winner = piece.team;
                 }
                 this.currentTurn = enemyTeam;
+                
+                logBattle(piece, startX, startY, endX, endY, captured);
+                
                 return captured;
             }
         }
@@ -655,6 +881,8 @@
             sprite.scale.set(0.5, 0.5, 1);
             sprite.position.set(width / 2 - 0.15, posY + height / 2 - 0.15, 0.0);
             sprite.userData = { isMenuBtn: true, action: 'resume_game' };
+            sprite.visible = false; 
+            closeButtons.push(sprite);
             return sprite;
         }
 
@@ -764,7 +992,6 @@
             const targetGameY = currentScene === 'game' ? 0 : -3.5;
             
             document.getElementById('ui-container').style.display = currentScene === 'game' ? 'flex' : 'none';
-            // Exibe a HUD de Status sempre que for o momento do jogo
             document.getElementById('status').style.display = currentScene === 'game' ? 'block' : 'none';
             hudGroup.visible = currentScene === 'game';
 
@@ -806,9 +1033,13 @@
         function setupP2PConnection() {
             peerConnection.on('open', () => {
                 gameMode = 'multi';
-                myTeamId = isHost ? 1 : 0; // Host é o Player 1 (Verde), Guest é o 2 (Vermelho)
-                btnRestart.visible = false; // Desativa o restart simples no multiplayer por enquanto
+                myTeamId = isHost ? 1 : 0; 
+                btnRestart.visible = false; 
                 updateGameTitle("Multiplayer: Jogador 2 Entrou");
+                
+                hasGameStarted = true;
+                closeButtons.forEach(b => b.visible = true);
+                
                 switchScene('game');
                 restarting = true;
             });
@@ -823,15 +1054,12 @@
             if (peer) return;
             const roomCode = Math.random().toString(36).substring(2, 8);
             
-            // 1. Gera o link instantaneamente no momento do clique
             const link = window.location.href.split('?')[0] + '?room=' + roomCode;
             
-            // 2. Copia para o Clipboard automaticamente (Fallback PC/Geral)
             fallbackCopyTextToClipboard(link);
             btnInvite.material.map = createTextSprite("Link Copiado!", 50, 512, 128, '#000000', '#ffeb3b').material.map;
             updateStatusText("Iniciando sala...");
 
-            // 3. Dispara o Compartilhamento Nativo do celular (Web Share API)
             if (navigator.share) {
                 navigator.share({
                     title: 'Jungle Chess 3D',
@@ -840,11 +1068,12 @@
                 }).catch((error) => console.log('Erro ao compartilhar:', error));
             }
 
-            // 4. Inicia a conexão P2P
             peer = new Peer(roomCode);
             peer.on('open', (id) => {
                 updateStatusText("Aguardando oponente entrar...");
                 updateGameTitle("Multiplayer: Sala ABERTA");
+                hasGameStarted = true;
+                closeButtons.forEach(b => b.visible = true);
             });
             peer.on('connection', (conn) => {
                 peerConnection = conn;
@@ -861,7 +1090,6 @@
             });
         }
 
-        // Verifica a URL na inicialização para ver se é Guest
         window.addEventListener('load', () => {
             const urlParams = new URLSearchParams(window.location.search);
             const joinRoom = urlParams.get('room');
@@ -882,7 +1110,6 @@
                 return;
             }
 
-            // Ignorar peças que ainda estão no processo de encolher/morrer na board visual
             const cpuPieces = pieceMeshes.filter(p => p.team === 0 && !p.isDead && !p.isDying);
             let possibleMoves = [];
 
@@ -893,24 +1120,19 @@
                             let score = 0;
                             const target = engine.getPieceAt(x, y);
                             
-                            // 1. Recompensa por capturar
                             if (target) {
                                 score += target.rank * 10;
-                                // Se o Rato matar o Elefante, é uma jogada de mestre
                                 if (piece.rank === 1 && target.rank === 8) score += 100;
                             }
                             
-                            // 2. Recompensa máxima por vitória (Chegar na toca inimiga)
                             if (engine.isDen(x, y, 1)) {
                                 score += 10000;
                             }
 
-                            // 3. Punição severa por entrar em armadilha inimiga atoa
                             if (engine.isTrap(x, y, 1)) {
                                 score -= 50;
                             }
 
-                            // 4. Bônus por avançar em direção à toca inimiga (Toca do jogador Verde é em x:3, y:8)
                             const oldDistToDen = Math.abs(piece.gridX - 3) + Math.abs(piece.gridY - 8);
                             const newDistToDen = Math.abs(x - 3) + Math.abs(y - 8);
                             if (newDistToDen < oldDistToDen) {
@@ -924,18 +1146,14 @@
             });
 
             if (possibleMoves.length > 0) {
-                // Ordena pelas melhores jogadas
                 possibleMoves.sort((a, b) => b.score - a.score);
                 const bestScore = possibleMoves[0].score;
-                // Filtra todas as jogadas que empatam na melhor pontuação
                 const bestMoves = possibleMoves.filter(m => m.score === bestScore);
-                // Escolhe aleatoriamente entre as melhores opções (Para o CPU não ser 100% previsível)
                 const chosenMove = bestMoves[Math.floor(Math.random() * bestMoves.length)];
                 
                 selectedPiece = chosenMove.piece;
                 tryMove(chosenMove.x, chosenMove.y);
             } else {
-                // Se as peças da CPU estiverem bloqueadas e presas sem saídas possíveis, passa a vez
                 engine.currentTurn = 1;
             }
             
@@ -948,138 +1166,73 @@
         const hudGroup = new THREE.Group();
         camera.add(hudGroup);
 
-        function createHUDButton(text, bgColor, textColor = '#000000') {
-            const { sprite } = createTextSprite(text, 45, 512, 128, textColor, bgColor);
-            sprite.scale.set(0.8, 0.2, 1);
+        function createSquareHUDButton(text, bgColor, textColor = '#000000') {
+            const width = 256; const height = 256;
+            const canvas = document.createElement('canvas'); canvas.width = width; canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            
+            ctx.fillStyle = bgColor;
+            if (ctx.roundRect) ctx.roundRect(10, 10, width-20, height-20, 40); else ctx.fillRect(10, 10, width-20, height-20);
+            ctx.fill(); 
+            ctx.lineWidth = 12; 
+            ctx.strokeStyle = '#000000'; 
+            ctx.stroke();
+            
+            ctx.fillStyle = textColor; 
+            ctx.textAlign = 'center'; 
+            ctx.textBaseline = 'middle';
+            ctx.font = `bold 100px sans-serif`;
+            ctx.fillText(text, width/2, height/2 + 5);
+
+            const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(canvas), depthTest: false }));
+            sprite.scale.set(0.3, 0.3, 1);
             sprite.userData = { isHUDButton: true, action: text };
             hudGroup.add(sprite);
             return sprite;
         }
 
-        const menuHudBtn = createHUDButton('☰ MENU', '#6B4226', '#000000');
+        const menuHudBtn = createSquareHUDButton('☰', '#6B4226', '#000000');
 
         function updateHUDPosition() {
             const dist = -2.5; 
             const vFOV = THREE.MathUtils.degToRad(camera.fov);
             const height = 2 * Math.tan(vFOV / 2) * Math.abs(dist);
             const width = height * camera.aspect;
-            const rightEdge = (width / 2) - 0.5; 
-            const topEdge = (height / 2) - 0.2; 
+            const rightEdge = (width / 2) - 0.25; 
+            const topEdge = (height / 2) - 0.25; 
             menuHudBtn.position.set(rightEdge, topEdge, dist);
         }
         updateHUDPosition();
 
         let activeDialogues = [];
 
-        // NOVO DESIGN GIGANTE: Estilo App de Mensagens (WhatsApp/iMessage) com âncora dinâmica
-        function createSpeechBubbleTexture(text, pieceData, isOffsetLeft) {
+        function createSpeechBubbleTexture(text, pieceData, isOffsetLeft, replyTo = null) {
             const canvas = document.createElement('canvas');
-            canvas.width = 1024; canvas.height = 1024; // Canvas enorme e quadrado para permitir esticar a cauda
+            canvas.width = 1024; canvas.height = 1024; 
             const ctx = canvas.getContext('2d');
             
             const team = pieceData.team;
             const rank = pieceData.rank;
-            const bgColor = team === 0 ? '#ffebee' : '#e8f5e9'; 
-            const textColor = '#000000';
+            const bgColor = team === 0 ? '#e1bee7' : '#c8e6c9'; 
+            const tagColor = team === 0 ? '#ce93d8' : '#a5d6a7';
+            const strokeColor = '#000000';
             const teamColor = TEAMS[team].color;
 
-            // Nickname Dinâmico: <nome>_<cor>_<poder><player>
-            const pieceName = RANKS[rank].name.toLowerCase();
-            const colorName = team === 0 ? 'red' : 'green';
-            const playerNum = team === 0 ? '2' : '1';
-            const nickname = `${pieceName}_${colorName}_${rank}${playerNum}`;
             const emoji = RANKS[rank].icon;
+            const nickname = getPieceNickname(pieceData);
 
-            const bubbleW = 800;
-            const bubbleH = 350; // Aumentado para caber o cabeçalho (Avatar + Nickname)
-            const bubbleY = 100; // Margem superior reduzida
-            
-            // Randomiza a bolha para a esquerda ou direita dentro do Canvas gigante
-            const bubbleX = isOffsetLeft ? 60 : (1024 - bubbleW - 60);
+            ctx.lineWidth = 6;
+            ctx.strokeStyle = strokeColor;
+            ctx.lineJoin = 'round';
 
-            // Sombra moderna
-            ctx.shadowColor = 'rgba(0,0,0,0.3)';
-            ctx.shadowBlur = 15;
-            ctx.shadowOffsetY = 10;
-
-            const r = 40;
-            ctx.fillStyle = bgColor;
-            ctx.beginPath();
-            
-            // Corpo da Bolha
-            ctx.moveTo(bubbleX + r, bubbleY);
-            ctx.lineTo(bubbleX + bubbleW - r, bubbleY);
-            ctx.quadraticCurveTo(bubbleX + bubbleW, bubbleY, bubbleX + bubbleW, bubbleY + r);
-            ctx.lineTo(bubbleX + bubbleW, bubbleY + bubbleH - r);
-            ctx.quadraticCurveTo(bubbleX + bubbleW, bubbleY + bubbleH, bubbleX + bubbleW - r, bubbleY + bubbleH);
-
-            // Cauda Elástica Dinâmica (aponta sempre para a base inferior centro do canvas)
-            const tailBaseX = bubbleX + bubbleW / 2;
-            const tailTargetX = 512; // Exatamente o centro inferior da imagem (que será a âncora na peça)
-            const tailTargetY = 950; 
-            
-            ctx.lineTo(tailBaseX + 40, bubbleY + bubbleH);
-            ctx.quadraticCurveTo(tailBaseX + 10, tailTargetY - 50, tailTargetX, tailTargetY);
-            ctx.quadraticCurveTo(tailBaseX - 30, tailTargetY - 50, tailBaseX - 40, bubbleY + bubbleH);
-
-            ctx.lineTo(bubbleX + r, bubbleY + bubbleH);
-            ctx.quadraticCurveTo(bubbleX, bubbleY + bubbleH, bubbleX, bubbleY + bubbleH - r);
-            ctx.lineTo(bubbleX, bubbleY + r);
-            ctx.quadraticCurveTo(bubbleX, bubbleY, bubbleX + r, bubbleY);
-            ctx.closePath();
-            ctx.fill();
-
-            // Desliga sombra para não borrar os textos e desenhos internos
-            ctx.shadowColor = 'transparent';
-
-            // --- HEADER DA MENSAGEM: Avatar + Nickname ---
-            const avatarX = bubbleX + 70;
-            const avatarY = bubbleY + 70;
-            const avatarRadius = 35;
-            
-            // Fundo Branco do Avatar + Borda 2px (Multiplicada por 2x na escala = 4)
-            ctx.beginPath();
-            ctx.arc(avatarX, avatarY, avatarRadius, 0, Math.PI * 2);
-            ctx.fillStyle = '#ffffff';
-            ctx.fill();
-            ctx.lineWidth = 4;
-            ctx.strokeStyle = teamColor;
-            ctx.stroke();
-
-            // Emoji do Avatar centralizado
-            ctx.font = '45px sans-serif';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(emoji, avatarX, avatarY + 5); // +5 ajuste ótico vertical
-
-            // Nickname (Arroba)
-            ctx.fillStyle = team === 0 ? '#b71c1c' : '#1b5e20'; // Tom mais escuro para ler bem
-            ctx.font = 'bold 30px "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
-            ctx.textAlign = 'left';
-            ctx.fillText(nickname, avatarX + avatarRadius + 15, avatarY);
-
-            // Linha Divisória de UI (separador fino)
-            ctx.beginPath();
-            ctx.moveTo(bubbleX + 30, avatarY + avatarRadius + 15);
-            ctx.lineTo(bubbleX + bubbleW - 30, avatarY + avatarRadius + 15);
-            ctx.strokeStyle = 'rgba(0,0,0,0.08)';
-            ctx.lineWidth = 2;
-            ctx.stroke();
-            // ---------------------------------------------
-
-            // --- CORPO DA MENSAGEM ---
-            ctx.fillStyle = textColor;
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.font = 'bold 45px "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
-            
-            // Quebra de linha da mensagem
+            ctx.font = 'bold 45px "Courier New", Courier, monospace'; 
             const words = text.split(' ');
             let line = ''; let lines = [];
+            const maxW = 650;
             for(let n = 0; n < words.length; n++) {
                 let testLine = line + words[n] + ' ';
                 let metrics = ctx.measureText(testLine);
-                if (metrics.width > bubbleW - 80 && n > 0) {
+                if (metrics.width > maxW && n > 0) {
                     lines.push(line);
                     line = words[n] + ' ';
                 } else {
@@ -1087,39 +1240,156 @@
                 }
             }
             lines.push(line);
+
+            const bubbleW = 760;
+            const replyHeightAdd = replyTo ? 100 : 0;
+            const contentH = lines.length * 50;
+            const bubbleH = Math.max(120, contentH + 60) + replyHeightAdd;
+            const bubbleY = 350; 
+            const bubbleX = isOffsetLeft ? 50 : (1024 - bubbleW - 50);
+            const c = 25;
+
+            ctx.font = 'bold 32px "Courier New", Courier, monospace';
+            const tagText = nickname;
+            const tagW = 100 + ctx.measureText(tagText).width; 
+            const tagH = 64;
+            const tagX = isOffsetLeft ? bubbleX + 20 : bubbleX + bubbleW - tagW - 20;
+            const tagY = bubbleY - tagH; 
+
+            ctx.fillStyle = tagColor;
+            ctx.beginPath();
+            ctx.moveTo(tagX + 15, tagY);
+            ctx.lineTo(tagX + tagW - 15, tagY);
+            ctx.lineTo(tagX + tagW, tagY + tagH);
+            ctx.lineTo(tagX, tagY + tagH);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+
+            ctx.shadowColor = 'rgba(0,0,0,0.4)';
+            ctx.shadowBlur = 0;
+            ctx.shadowOffsetX = 6;
+            ctx.shadowOffsetY = 6;
+
+            const tailTargetX = 512;
+            const tailTargetY = 1000; 
+            const tailBaseX = bubbleX + (isOffsetLeft ? bubbleW - 120 : 120); 
+
+            ctx.fillStyle = bgColor;
+            ctx.beginPath();
+            ctx.moveTo(bubbleX + c, bubbleY);
+            ctx.lineTo(bubbleX + bubbleW - c, bubbleY);
+            ctx.lineTo(bubbleX + bubbleW, bubbleY + c);
+            ctx.lineTo(bubbleX + bubbleW, bubbleY + bubbleH - c);
+            ctx.lineTo(bubbleX + bubbleW - c, bubbleY + bubbleH);
             
-            // Cálculo para centralizar o texto apenas no espaço restante abaixo do cabeçalho
-            const headerBottom = avatarY + avatarRadius + 15;
-            const textSpaceH = (bubbleY + bubbleH) - headerBottom;
-            let startY = headerBottom + (textSpaceH / 2) - ((lines.length - 1) * 30);
+            ctx.lineTo(tailBaseX + 25, bubbleY + bubbleH);
+            ctx.lineTo(tailTargetX, tailTargetY);
+            ctx.lineTo(tailBaseX - 25, bubbleY + bubbleH);
+
+            ctx.lineTo(bubbleX + c, bubbleY + bubbleH);
+            ctx.lineTo(bubbleX, bubbleY + bubbleH - c);
+            ctx.lineTo(bubbleX, bubbleY + c);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+
+            ctx.shadowColor = 'transparent';
+
+            const avatarRadius = 22;
+            const avatarX = tagX + 35;
+            const avatarY = tagY + tagH / 2;
+
+            ctx.beginPath();
+            ctx.arc(avatarX, avatarY, avatarRadius, 0, Math.PI * 2);
+            ctx.fillStyle = '#ffffff';
+            ctx.fill();
+            ctx.lineWidth = 3;
+            ctx.strokeStyle = teamColor;
+            ctx.stroke();
+
+            ctx.font = '28px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(emoji, avatarX, avatarY + 2); 
+
+            ctx.fillStyle = strokeColor; 
+            ctx.font = 'bold 30px "Courier New", Courier, monospace';
+            ctx.textAlign = 'left';
+            ctx.fillText(nickname, avatarX + avatarRadius + 12, avatarY + 2);
+
+            let startY = bubbleY + 40;
+            if (replyTo) {
+                const rx = bubbleX + 30;
+                const ry = bubbleY + 25;
+                const rw = bubbleW - 60;
+                const rh = 80;
+
+                ctx.fillStyle = 'rgba(0,0,0,0.1)';
+                ctx.beginPath();
+                ctx.moveTo(rx + 8, ry);
+                ctx.lineTo(rx + rw - 8, ry);
+                ctx.quadraticCurveTo(rx + rw, ry, rx + rw, ry + 8);
+                ctx.lineTo(rx + rw, ry + rh - 8);
+                ctx.quadraticCurveTo(rx + rw, ry + rh, rx + rw - 8, ry + rh);
+                ctx.lineTo(rx + 8, ry + rh);
+                ctx.quadraticCurveTo(rx, ry + rh, rx, ry + rh - 8);
+                ctx.lineTo(rx, ry + 8);
+                ctx.quadraticCurveTo(rx, ry, rx + 8, ry);
+                ctx.fill();
+
+                ctx.fillStyle = 'rgba(0,0,0,0.5)';
+                ctx.beginPath();
+                ctx.moveTo(rx, ry + 8);
+                ctx.lineTo(rx + 6, ry + 8);
+                ctx.lineTo(rx + 6, ry + rh - 8);
+                ctx.lineTo(rx, ry + rh - 8);
+                ctx.fill();
+
+                ctx.fillStyle = '#222222'; 
+                ctx.font = 'bold 22px "Courier New", Courier, monospace'; 
+                ctx.textAlign = 'left';
+                ctx.textBaseline = 'top';
+                ctx.fillText(`Replying to @${replyTo.nickname}`, rx + 15, ry + 12);
+
+                ctx.fillStyle = '#444444'; 
+                ctx.font = 'italic 26px "Courier New", Courier, monospace'; 
+                let snippetArray = Array.from(replyTo.text);
+                let snippet = snippetArray.length > 25 ? snippetArray.slice(0, 25).join('') + '...' : replyTo.text;
+                ctx.fillText(`"${snippet}"`, rx + 15, ry + 40);
+
+                startY += 90;
+            }
+
+            ctx.font = 'bold 45px "Courier New", Courier, monospace';
+            ctx.fillStyle = strokeColor;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            
+            const remainingH = bubbleH - (startY - bubbleY);
+            startY = startY + (remainingH / 2) - ((lines.length - 1) * 25);
             
             for(let i = 0; i < lines.length; i++) {
-                ctx.fillText(lines[i].trim(), bubbleX + bubbleW/2, startY + (i * 60));
+                ctx.fillText(lines[i].trim(), bubbleX + bubbleW/2, startY + (i * 50));
             }
 
             return new THREE.CanvasTexture(canvas);
         }
 
-        function spawnSpeechBubble(pieceData, text) {
-            // Decide se a bolha pende para a esquerda ou direita
+        function spawnSpeechBubble(pieceData, text, replyTo = null) {
             const isOffsetLeft = Math.random() > 0.5;
-            const tex = createSpeechBubbleTexture(text, pieceData, isOffsetLeft);
+            const tex = createSpeechBubbleTexture(text, pieceData, isOffsetLeft, replyTo);
             const mat = new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true });
             const sprite = new THREE.Sprite(mat);
             
-            // ÂNCORA MAGICA: 0.5, 0.0 faz com que o y=0 do sprite seja a extremidade inferior do canvas (onde a cauda do balão toca!)
             sprite.center.set(0.5, 0.0);
-            
-            // Balão super grande e legível de longe
-            sprite.scale.set(3, 3, 1);
-            
-            // Posiciona a base do Sprite exatamente no centro da tampa do cilindro
+            sprite.scale.set(4.5, 4.5, 1);
             sprite.position.set(0, 0.3, 0); 
             
             pieceData.mesh.add(sprite); 
-            
-            // initialY guarda a âncora para a animação de flutuar
-            activeDialogues.push({ sprite, life: 5.5, piece: pieceData, timer: 0, initialY: 0.3 });
+            activeDialogues.push({ sprite, life: 5.5, piece: pieceData, timer: 0 });
+
+            logChat(pieceData, text, replyTo);
         }
 
 
@@ -1418,6 +1688,10 @@
                 gameMode = 'pvp';
                 updateGameTitle("Local PVP");
                 btnRestart.visible = true;
+                
+                hasGameStarted = true;
+                closeButtons.forEach(b => b.visible = true);
+                
                 switchScene('game'); 
                 restarting = true; 
             } 
@@ -1425,6 +1699,10 @@
                 gameMode = 'cpu';
                 updateGameTitle("Local V.S. CPU");
                 btnRestart.visible = true;
+                
+                hasGameStarted = true;
+                closeButtons.forEach(b => b.visible = true);
+                
                 switchScene('game'); 
                 restarting = true; 
             } 
@@ -1433,7 +1711,9 @@
                 if (selectedPiece) { selectedPiece.targetPos.y = 0.4; selectedPiece = null; }
                 clearHighlights(); restarting = true; 
             }
-            else if (action === 'resume_game') { switchScene('game'); } 
+            else if (action === 'resume_game') { 
+                if(hasGameStarted) switchScene('game'); 
+            } 
             else if (action === 'show_options') { switchScene('options'); } 
             else if (action === 'show_about') { switchScene('about'); } 
             else if (action === 'show_menu') { switchScene('menu'); } 
@@ -1465,8 +1745,8 @@
             if (obj.userData.isMenuBtn) { handleMenuInteraction(obj); return; }
             if (obj.userData.isHUDButton) {
                 playSound('beep-up');
-                obj.scale.set(0.7, 0.15, 1); setTimeout(() => obj.scale.set(0.8, 0.2, 1), 150);
-                if (obj.userData.action === '☰ MENU') { switchScene('menu'); }
+                obj.scale.set(0.25, 0.25, 1); setTimeout(() => obj.scale.set(0.3, 0.3, 1), 150);
+                if (obj.userData.action === '☰') { switchScene('menu'); }
                 return;
             }
             if (currentScene !== 'game' || engine.winner !== null || isCPUThinking) return;
@@ -1528,7 +1808,7 @@
         function onPointerDown(event) {
             initAudio(); 
 
-            idleTime = 0;
+            resetIdleTime();
 
             if (!gyroInitialized) {
                 gyroInitialized = true;
@@ -1562,6 +1842,7 @@
             
             const intersects = raycaster.intersectObjects(intersectables, true)
                 .filter(hit => {
+                    if (!hit.object.visible) return false;
                     const ud = hit.object.userData; if (!ud) return false;
                     if (currentScene === 'game') {
                         if (ud.isPiece && ud.pieceData === selectedPiece) return false;
@@ -1580,7 +1861,7 @@
 
         function onTouchStart(event) {
             isTransitioningCamera = false; 
-            idleTime = 0;
+            resetIdleTime();
             if (renderer.xr.isPresenting && event.touches.length === 2) {
                 event.preventDefault();
                 const t1 = event.touches[0];
@@ -1654,7 +1935,7 @@
         function onSelectXR(event) {
             initAudio(); const controller = event.target;
             isTransitioningCamera = false;
-            idleTime = 0;
+            resetIdleTime();
             if (controller1Selected && controller2Selected) return;
             if (isARSession && !isARPlaced) {
                 if (reticle.visible) {
@@ -1678,6 +1959,7 @@
             
             const intersects = raycaster.intersectObjects(intersectables, true)
                 .filter(hit => {
+                    if (!hit.object.visible) return false;
                     const ud = hit.object.userData; if (!ud) return false;
                     if (currentScene === 'game') {
                         if (ud.isPiece && ud.pieceData === selectedPiece) return false;
@@ -1731,7 +2013,7 @@
             if (!renderer.xr.isPresenting) return;
         
             if (grip1Active && grip2Active) {
-                idleTime = 0; 
+                resetIdleTime(); 
                 if (!isDoubleGripping) {
                     isDoubleGripping = true;
                     isSingleGripping = false; 
@@ -1768,7 +2050,7 @@
                     gameGroup.userData.targetY = gameGroup.position.y;
                 }
             } else if (grip1Active || grip2Active) {
-                idleTime = 0;
+                resetIdleTime();
                 if (isDoubleGripping) {
                     isDoubleGripping = false;
                     isSingleGripping = false;
@@ -1799,11 +2081,11 @@
                 
                             if (Math.abs(thumbstickX) > 0.1) {
                                 gameGroup.rotation.y -= thumbstickX * delta * 2;
-                                idleTime = 0;
+                                resetIdleTime();
                             }
                             if (Math.abs(thumbstickY) > 0.1) {
                                 gameGroup.rotation.x -= thumbstickY * delta * 2;
-                                idleTime = 0;
+                                resetIdleTime();
                             }
                         }
                     }
@@ -1822,11 +2104,12 @@
                     initPieces();
                     selectedPiece = null;
                     clearHighlights();
+                    document.getElementById('tab-log').innerHTML = ''; 
+                    document.getElementById('tab-chat').innerHTML = '';
                     restarting = false;
                 }
             }
 
-            // GATILHO DA IA (CPU)
             if (currentScene === 'game' && gameMode === 'cpu' && engine.currentTurn === 0 && !isCPUThinking && engine.winner === null && !restarting) {
                 const isAnyPieceMoving = pieceMeshes.some(p => p.isMoving || p.isMorphing || p.squashTimer > 0 || p.trapAnimState > 0 || p.captureAnimTimer > 0 || p.isDying);
                 if (!isAnyPieceMoving) {
@@ -1842,76 +2125,65 @@
                 idleTime += delta;
                 const alivePieces = pieceMeshes.filter(p => !p.isDead && !p.isDying && !p.isMoving && !p.isMorphing && p.trapAnimState === 0);
                 
-                // Dispara Retrucagens Agendadas
                 for (let i = pendingReplies.length - 1; i >= 0; i--) {
                     const pr = pendingReplies[i];
                     if (time >= pr.triggerTime) {
                         if (!pr.piece.isDead && !pr.piece.isDying) {
-                            spawnSpeechBubble(pr.piece, pr.text);
-                            lastGossipTime = time; // Previne que duas peças falem ao mesmo tempo
+                            spawnSpeechBubble(pr.piece, pr.text, pr.replyTo);
+                            lastGossipTime = time; 
                         }
                         pendingReplies.splice(i, 1);
                     }
                 }
 
-                // Inicia Conversa Idle
                 if (idleTime > 10.0 && (time - lastGossipTime > 8.0) && pendingReplies.length === 0) {
                     if (alivePieces.length > 0) {
                         const p = alivePieces[Math.floor(Math.random() * alivePieces.length)];
                         const lines = GOSSIP_TEXTS[p.rank];
                         const textTpl = lines[Math.floor(Math.random() * lines.length)];
                         
-                        // Emoji contextual para insultar/provocar a equipa oposta
                         const enemyEmoji = p.team === 0 ? '🟢' : '🔴';
                         const finalGossipText = textTpl(enemyEmoji);
                         
                         spawnSpeechBubble(p, finalGossipText);
                         lastGossipTime = time;
+                        
+                        // Foca a app no chat automaticamente chamando a função global
+                        window.autoOpenChat();
 
-                        // Lógica de Gatilho para Respostas Dinâmicas
+                        const replyData = { nickname: getPieceNickname(p), text: finalGossipText };
+
                         if (finalGossipText.includes('salto') || finalGossipText.includes('salta')) {
-                            // Tigre/Leão fala de saltar rios -> Rato reage
                             const enemyRat = alivePieces.find(ep => ep.rank === 1 && ep.team !== p.team);
-                            if (enemyRat) {
-                                pendingReplies.push({ piece: enemyRat, text: `Cai na água para veres se não te afogo! 🌊💀`, triggerTime: time + 3.0 });
-                            }
+                            if (enemyRat) pendingReplies.push({ piece: enemyRat, text: `Cai na água para veres se não te afogo! 🌊💀`, triggerTime: time + 3.0, replyTo: replyData });
                         } else if (finalGossipText.includes('Elefante')) {
-                            // Rato ameaça Elefante -> Elefante entra em pânico
                             const enemyElephant = alivePieces.find(ep => ep.rank === 8 && ep.team !== p.team);
-                            if (enemyElephant) {
-                                pendingReplies.push({ piece: enemyElephant, text: `Eek! Fica longe de mim! 🐘💦🏃`, triggerTime: time + 3.0 });
-                            }
+                            if (enemyElephant) pendingReplies.push({ piece: enemyElephant, text: `Eek! Fica longe de mim! 🐘💦🏃`, triggerTime: time + 3.0, replyTo: replyData });
                         } else if (finalGossipText.includes('Rato') && p.rank === 8) {
-                            // Elefante fala de medo do Rato -> Rato ameaça-o
                             const enemyRat = alivePieces.find(ep => ep.rank === 1 && ep.team !== p.team);
-                            if (enemyRat) {
-                                pendingReplies.push({ piece: enemyRat, text: `Hehehe... Vou roer os teus pés! 😈🐭`, triggerTime: time + 3.0 });
-                            }
+                            if (enemyRat) pendingReplies.push({ piece: enemyRat, text: `Hehehe... Vou roer os teus pés! 😈🐭`, triggerTime: time + 3.0, replyTo: replyData });
                         } else if (finalGossipText.includes('nado melhor') || finalGossipText.includes('domínio')) {
-                            // Rato gaba-se da água -> Gatos respondem
                             const enemyCat = alivePieces.find(ep => (ep.rank === 6 || ep.rank === 7) && ep.team !== p.team);
-                            if (enemyCat) {
-                                pendingReplies.push({ piece: enemyCat, text: `Sai daí que eu te mostro quem manda! 🥩🐾`, triggerTime: time + 3.0 });
-                            }
+                            if (enemyCat) pendingReplies.push({ piece: enemyCat, text: `Sai daí que eu te mostro quem manda! 🥩🐾`, triggerTime: time + 3.0, replyTo: replyData });
                         }
                     }
                 }
             }
 
-            // Animador de Balões Moderno (Paira gentilmente e flutua ao morrer)
             for(let i = activeDialogues.length - 1; i >= 0; i--) {
                 const d = activeDialogues[i];
                 d.life -= delta;
                 d.timer += delta;
                 
-                // Hover suave usando uma onda Seno
-                d.sprite.position.y = d.initialY + Math.sin(d.timer * 4) * 0.05;
-
-                // Fading e flutuação ao morrer
-                if (d.life < 1.0) {
-                    d.sprite.position.y += (1.0 - d.life) * 0.1; // Flutua subtilmente no fim
-                    d.sprite.material.opacity = d.life;
+                let scale = 4.5;
+                if (d.timer < 0.2) {
+                    scale = 4.5 * (d.timer / 0.2);
+                } else if (d.life < 0.3) {
+                    scale = 4.5 * (d.life / 0.3); 
+                    d.sprite.material.opacity = d.life * 3.3;
                 }
+
+                d.sprite.scale.set(scale, scale, 1);
 
                 if (d.life <= 0) {
                     d.piece.mesh.remove(d.sprite);
@@ -1919,9 +2191,6 @@
                 }
             }
 
-            // =====================================
-            // UI Dinâmica de Status
-            // =====================================
             if (currentScene === 'game') {
                 const statusDiv = document.getElementById('status');
                 let newText = "";
@@ -1946,7 +2215,6 @@
             if(controls.userData) {
                 currentGyroOffset.lerp(targetGyroOffset, 5 * delta);
                 const finalTarget = controls.userData.target.clone();
-                // Apenas aplica deslocamento do Giroscópio fora do WebXR
                 if (!renderer.xr.isPresenting) {
                     finalTarget.x += currentGyroOffset.x;
                     finalTarget.z += currentGyroOffset.y;
@@ -1961,7 +2229,6 @@
                 }
             }
 
-            // Impede que as transições interfiram com a escala e pan se o controle duplo/pinch estiver ativo
             if (!isPinching && !isDoubleGripping) {
                 const s = THREE.MathUtils.lerp(gameGroup.scale.y, gameGroup.userData.targetScale, 4 * delta);
                 if (Math.abs(s - gameGroup.userData.targetScale) > 0.001) {
