@@ -544,6 +544,13 @@
                 this.secretTileRightActive = false;
                 this.secretPieceLeft = null;
                 this.secretPieceRight = null;
+                // Easter Egg Phase 2: Banana
+                this.bananaLeftActive = false;
+                this.bananaRightActive = false;
+                this.bananaTimers = [
+                    { active: false, turnsLeft: 0, pending: false },
+                    { active: false, turnsLeft: 0, pending: false }
+                ];
             }
             addPiece(piece) {
                 if (piece.gridX === -1 && piece.gridY === 4) this.secretPieceLeft = piece;
@@ -641,18 +648,63 @@
                 else if (endX === 7 && endY === 4) this.secretPieceRight = piece;
                 else this.board[endX][endY] = piece;
 
-                // Easter egg activation
-                if (endX === 0 && endY === 4) this.secretTileLeftActive = true;
-                if (endX === 6 && endY === 4) this.secretTileRightActive = true;
+                // Easter egg activation: glass tile appears + banana
+                if (endX === 0 && endY === 4 && !this.secretTileLeftActive) {
+                    this.secretTileLeftActive = true;
+                    this.bananaLeftActive = true;
+                }
+                if (endX === 6 && endY === 4 && !this.secretTileRightActive) {
+                    this.secretTileRightActive = true;
+                    this.bananaRightActive = true;
+                }
+
+                // Easter egg Phase 2: banana collection
+                let bananaCollected = false;
+                let bananaReturnPos = null;
+                if (endX === -1 && endY === 4 && this.bananaLeftActive) {
+                    bananaCollected = true;
+                    this.bananaLeftActive = false;
+                    this.secretTileLeftActive = false;
+                    bananaReturnPos = { x: 0, y: 4 };
+                    // Move piece back logically to A5
+                    this.secretPieceLeft = null;
+                    piece.gridX = 0; piece.gridY = 4;
+                    this.board[0][4] = piece;
+                    // Prepare banana timer for this team (will start AFTER fall sequence)
+                    this.bananaTimers[piece.team] = { active: false, turnsLeft: 5, pending: true };
+                } else if (endX === 7 && endY === 4 && this.bananaRightActive) {
+                    bananaCollected = true;
+                    this.bananaRightActive = false;
+                    this.secretTileRightActive = false;
+                    bananaReturnPos = { x: 6, y: 4 };
+                    // Move piece back logically to G5
+                    this.secretPieceRight = null;
+                    piece.gridX = 6; piece.gridY = 4;
+                    this.board[6][4] = piece;
+                    // Prepare banana timer for this team (will start AFTER fall sequence)
+                    this.bananaTimers[piece.team] = { active: false, turnsLeft: 5, pending: true };
+                }
+
                 const enemyTeam = piece.team === 0 ? 1 : 0;
                 if (this.isDen(endX, endY, enemyTeam) || this.pieces.filter(p => p.team === enemyTeam).length === 0) {
                     this.winner = piece.team;
                 }
                 this.currentTurn = enemyTeam;
 
+                // Decrement banana timers each turn (only if active, not pending)
+                for (let t = 0; t < 2; t++) {
+                    const bt = this.bananaTimers[t];
+                    if (bt.active && !bt.pending) {
+                        bt.turnsLeft--;
+                        if (bt.turnsLeft <= 0) {
+                            bt.active = false;
+                        }
+                    }
+                }
+
                 logBattle(piece, startX, startY, endX, endY, captured);
 
-                return captured;
+                return { captured, bananaCollected, bananaReturnPos };
             }
         }
 
@@ -776,6 +828,30 @@
                 notes.forEach((freq, index) => { osc.frequency.setValueAtTime(freq, now + timeOffset); timeOffset += (index >= notes.length - 2) ? 0.4 : 0.15; });
                 gain.gain.setValueAtTime(0.3, now + timeOffset); gain.gain.linearRampToValueAtTime(0, now + timeOffset + 1.5);
                 osc.start(now); osc.stop(now + timeOffset + 1.5);
+            } else if (type === 'fall') {
+                // Long descending whistle — cartoonish abyss fall
+                osc.type = 'sine'; osc.frequency.setValueAtTime(900, now);
+                osc.frequency.exponentialRampToValueAtTime(80, now + 2.5);
+                gain.gain.setValueAtTime(0.35, now);
+                gain.gain.linearRampToValueAtTime(0.25, now + 1.5);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 2.8);
+                osc.start(now); osc.stop(now + 2.8);
+            } else if (type === 'glass_break') {
+                // Short glass shatter — noise burst + high frequency
+                const nBuf = createNoiseBuffer();
+                const nSrc = audioCtx.createBufferSource(); nSrc.buffer = nBuf;
+                const hpf = audioCtx.createBiquadFilter(); hpf.type = 'highpass'; hpf.frequency.setValueAtTime(4000, now);
+                const gn = audioCtx.createGain(); gn.gain.setValueAtTime(0.5, now); gn.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
+                nSrc.connect(hpf); hpf.connect(gn); gn.connect(audioCtx.destination); nSrc.start(now); nSrc.stop(now + 0.4);
+                // Tinkle overlay
+                osc.type = 'sine'; osc.frequency.setValueAtTime(2000, now); osc.frequency.exponentialRampToValueAtTime(6000, now + 0.1);
+                gain.gain.setValueAtTime(0.2, now); gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+                osc.start(now); osc.stop(now + 0.25);
+            } else if (type === 'land_safe') {
+                // Soft landing thud
+                osc.type = 'sine'; osc.frequency.setValueAtTime(150, now); osc.frequency.exponentialRampToValueAtTime(60, now + 0.2);
+                gain.gain.setValueAtTime(0.4, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+                osc.start(now); osc.stop(now + 0.3);
             }
         }
 
@@ -1654,6 +1730,44 @@
         gameGroup.add(secretTileRight); tileMeshes.push(secretTileRight);
 
         // ==========================================/
+        // EASTER EGG PHASE 2: Banana Sprites
+        // ==========================================/
+        function createBananaSprite() {
+            const canvas = document.createElement('canvas'); canvas.width = 256; canvas.height = 256;
+            const ctx = canvas.getContext('2d');
+            ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = '180px sans-serif';
+            ctx.shadowColor = 'rgba(255, 220, 0, 0.8)'; ctx.shadowBlur = 30;
+            ctx.fillText('🍌', 128, 140);
+            const tex = new THREE.CanvasTexture(canvas);
+            const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true }));
+            sprite.scale.set(0.8, 0.8, 1);
+            return sprite;
+        }
+
+        const bananaLeft = createBananaSprite();
+        bananaLeft.position.copy(posLeft); bananaLeft.position.y = 0.5;
+        bananaLeft.visible = false; gameGroup.add(bananaLeft);
+
+        const bananaRight = createBananaSprite();
+        bananaRight.position.copy(posRight); bananaRight.position.y = 0.5;
+        bananaRight.visible = false; gameGroup.add(bananaRight);
+
+        // Banana timer visuals in nest (per team)
+        let bananaTimerSprites = [null, null];
+        function createBananaTimerSprite(turnsLeft) {
+            const canvas = document.createElement('canvas'); canvas.width = 256; canvas.height = 256;
+            const ctx = canvas.getContext('2d');
+            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.font = '100px sans-serif'; ctx.fillText('🍌', 128, 90);
+            ctx.font = 'bold 80px sans-serif'; ctx.fillStyle = '#fff'; ctx.strokeStyle = '#000'; ctx.lineWidth = 6;
+            ctx.strokeText(turnsLeft.toString(), 128, 200); ctx.fillText(turnsLeft.toString(), 128, 200);
+            const tex = new THREE.CanvasTexture(canvas);
+            const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true }));
+            sprite.scale.set(1.0, 1.0, 1);
+            return sprite;
+        }
+
+        // ==========================================/
         // CILINDRO ARREDONDADO E MATERIAL "MASSINHA"
         // ==========================================/
         function createPieceMaterial(rank, team) {
@@ -1747,6 +1861,10 @@
             pieceMeshes.forEach(p => gameGroup.remove(p.mesh)); pieceMeshes = [];
             activeParticles.forEach(p => gameGroup.remove(p.mesh)); activeParticles = [];
             engine.reset();
+            // Reset easter egg visuals
+            secretTileLeft.visible = false; secretTileRight.visible = false;
+            bananaLeft.visible = false; bananaRight.visible = false;
+            bananaTimerSprites.forEach((s, i) => { if (s) { gameGroup.remove(s); bananaTimerSprites[i] = null; } });
 
             INITIAL_SETUP.forEach(setup => {
                 const pos = getWorldPos(setup.x, setup.y);
@@ -1781,9 +1899,17 @@
         let selectedPiece = null;
         const validHighlightMeshes = [];
 
+        function addHighlightAt(x, y, playerColor) {
+            const hl = new THREE.Mesh(highlightGeo, new THREE.MeshBasicMaterial({ color: playerColor, transparent: true, opacity: 0.7 }));
+            const pos = getWorldPos(x, y); hl.position.set(pos.x, 0.15, pos.z);
+            hl.userData = { isTile: true, gridX: x, gridY: y };
+            gameGroup.add(hl); validHighlightMeshes.push(hl);
+        }
+
         function showValidMoves(piece) {
             clearHighlights();
             const playerColor = TEAMS[piece.team].color;
+            // Standard board tiles
             for (let x = 0; x < BOARD_COLS; x++) {
                 for (let y = 0; y < BOARD_ROWS; y++) {
                     if (engine.isValidMove(piece, piece.gridX, piece.gridY, x, y)) {
@@ -1835,6 +1961,13 @@
                         gameGroup.add(hl); validHighlightMeshes.push(hl);
                     }
                 }
+            }
+            // Easter egg: secret tile highlights (banana tiles)
+            if (engine.secretTileLeftActive && engine.isValidMove(piece, piece.gridX, piece.gridY, -1, 4)) {
+                addHighlightAt(-1, 4, '#FFD700');
+            }
+            if (engine.secretTileRightActive && engine.isValidMove(piece, piece.gridX, piece.gridY, 7, 4)) {
+                addHighlightAt(7, 4, '#FFD700');
             }
         }
 
@@ -1961,23 +2094,75 @@
                 }
 
                 const isRat = selectedPiece.rank === 1;
-                const captured = engine.executeMove(selectedPiece, endX, endY);
+                const moveResult = engine.executeMove(selectedPiece, endX, endY);
+                const captured = moveResult.captured;
                 const targetWorld = getWorldPos(endX, endY);
 
                 // Easter egg visual activation
                 if (engine.secretTileLeftActive && !secretTileLeft.visible) {
                     secretTileLeft.visible = true;
+                    bananaLeft.visible = true;
+                    bananaLeft.position.y = 3.0; // Start high, will animate drop
                     playSound('beep-up');
                 }
                 if (engine.secretTileRightActive && !secretTileRight.visible) {
                     secretTileRight.visible = true;
+                    bananaRight.visible = true;
+                    bananaRight.position.y = 3.0; // Start high, will animate drop
                     playSound('beep-up');
+                }
+
+                // Easter egg Phase 2: Banana collection — override animation
+                if (moveResult.bananaCollected) {
+                    const returnPos = moveResult.bananaReturnPos;
+                    const returnWorld = getWorldPos(returnPos.x, returnPos.y);
+                    const isLeftSide = (endX === -1);
+                    const denPos = getWorldPos(3, selectedPiece.team === 0 ? 0 : 8);
+
+                    // Timer sprite will be created in Phase 5 when it actually activates
+
+                    selectedPiece.easterEggAnim = {
+                        phase: 0, // 0=move to tile, 1=banana flies, 2=tile breaks+fall, 3=fall to abyss, 4=fall from sky
+                        timer: 0,
+                        isLeftSide: isLeftSide,
+                        bananaMesh: isLeftSide ? bananaLeft : bananaRight,
+                        tileMesh: isLeftSide ? secretTileLeft : secretTileRight,
+                        denWorldPos: denPos,
+                        returnWorldPos: returnWorld,
+                        tileWorldPos: getWorldPos(endX, endY)
+                    };
+
+                    // Start normal move to tile
+                    if (selectedPiece.trapAnimState > 0) selectedPiece.trapAnimState = 0;
+                    selectedPiece.startPos = selectedPiece.mesh.position.clone();
+                    selectedPiece.targetPos = new THREE.Vector3(targetWorld.x, 0.4, targetWorld.z);
+                    selectedPiece.isMoving = true; selectedPiece.moveProgress = 0;
+                    selectedPiece.isMorphing = false; selectedPiece.isBigAnim = false; selectedPiece.cylinder.visible = true;
+                    selectedPiece.capturedPiece = null; selectedPiece.isVictoryPending = false;
+                    selectedPiece = null; clearHighlights();
+                    playSound('jump');
+                    return;
                 }
 
                 const startIsWater = engine.isWater(startX, startY);
                 const endIsWater = engine.isWater(endX, endY);
 
                 if (isRat && startIsWater !== endIsWater) { playSound('splash'); } else { playSound('jump'); }
+
+                // Update banana timer visuals each turn (both teams)
+                for (let t = 0; t < 2; t++) {
+                    const bt = engine.bananaTimers[t];
+                    if (bt.active && !bt.pending) {
+                        if (bananaTimerSprites[t]) gameGroup.remove(bananaTimerSprites[t]);
+                        const denPos = getWorldPos(3, t === 0 ? 0 : 8);
+                        bananaTimerSprites[t] = createBananaTimerSprite(bt.turnsLeft);
+                        bananaTimerSprites[t].position.set(denPos.x, 1.5, denPos.z);
+                        gameGroup.add(bananaTimerSprites[t]);
+                    } else if (!bt.active && bananaTimerSprites[t]) {
+                        gameGroup.remove(bananaTimerSprites[t]);
+                        bananaTimerSprites[t] = null;
+                    }
+                }
 
                 if (selectedPiece.trapAnimState > 0) selectedPiece.trapAnimState = 0;
                 selectedPiece.startPos = selectedPiece.mesh.position.clone();
@@ -2919,8 +3104,142 @@
                 }
             });
 
+            // Easter egg: animate banana drop onto glass tiles
+            if (bananaLeft.visible && bananaLeft.position.y > 0.55) {
+                bananaLeft.position.y = THREE.MathUtils.lerp(bananaLeft.position.y, 0.5, delta * 4);
+                bananaLeft.material.rotation = Math.sin(time * 8) * 0.3;
+            }
+            if (bananaRight.visible && bananaRight.position.y > 0.55) {
+                bananaRight.position.y = THREE.MathUtils.lerp(bananaRight.position.y, 0.5, delta * 4);
+                bananaRight.material.rotation = Math.sin(time * 8) * 0.3;
+            }
+            // Easter egg: banana bob animation when idle on tile
+            if (bananaLeft.visible && bananaLeft.position.y <= 0.55) {
+                bananaLeft.position.y = 0.5 + Math.sin(time * 3) * 0.08;
+            }
+            if (bananaRight.visible && bananaRight.position.y <= 0.55) {
+                bananaRight.position.y = 0.5 + Math.sin(time * 3) * 0.08;
+            }
+            // Easter egg: banana timer bob (both teams)
+            for (let t = 0; t < 2; t++) {
+                if (bananaTimerSprites[t]) {
+                    bananaTimerSprites[t].position.y = 1.5 + Math.sin(time * 2 + t) * 0.1;
+                }
+            }
+
             pieceMeshes.forEach(pd => {
                 if (pd.isDead) return;
+
+                // Easter Egg Phase 2: Multi-phase fall animation
+                if (pd.easterEggAnim) {
+                    const anim = pd.easterEggAnim;
+                    anim.timer += delta;
+
+                    if (anim.phase === 0) {
+                        // Phase 0: Normal move to glass tile (handled by isMoving below)
+                        if (!pd.isMoving && pd.squashTimer <= 0) {
+                            anim.phase = 1; anim.timer = 0;
+                        }
+                        // Don't return — let isMoving animation run below
+                    } else if (anim.phase === 1) {
+                        // Phase 1: Banana flies to the den
+                        const flySpeed = 4.0;
+                        const bPos = anim.bananaMesh.position;
+                        const dPos = anim.denWorldPos;
+                        bPos.x = THREE.MathUtils.lerp(bPos.x, dPos.x, delta * flySpeed);
+                        bPos.y = THREE.MathUtils.lerp(bPos.y, 1.5, delta * flySpeed);
+                        bPos.z = THREE.MathUtils.lerp(bPos.z, dPos.z, delta * flySpeed);
+                        anim.bananaMesh.material.rotation += delta * 15; // Spin!
+                        const dist = bPos.distanceTo(new THREE.Vector3(dPos.x, 1.5, dPos.z));
+                        if (dist < 0.15 || anim.timer > 2.0) {
+                            // Banana rests at the den (stays visible)
+                            bPos.set(dPos.x, 1.5, dPos.z);
+                            anim.bananaMesh.material.rotation = 0;
+                            anim.phase = 2; anim.timer = 0;
+                            // Glass break!
+                            playSound('glass_break');
+                            spawnCustomParticles(['💎', '✨', '💫', '🔷', '❄️'], anim.tileWorldPos, 25);
+                            anim.tileMesh.visible = false;
+                        }
+                        return;
+                    } else if (anim.phase === 2) {
+                        // Phase 2: Coyote time! Piece hovers confused before falling
+                        if (anim.timer < 0.01) {
+                            // Spawn ❓ emoji above the piece
+                            const qCanvas = document.createElement('canvas'); qCanvas.width = 128; qCanvas.height = 128;
+                            const qCtx = qCanvas.getContext('2d'); qCtx.font = '80px sans-serif'; qCtx.textAlign = 'center'; qCtx.textBaseline = 'middle'; qCtx.fillText('❓', 64, 64);
+                            anim.questionSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(qCanvas), transparent: true }));
+                            anim.questionSprite.scale.set(0, 0, 1);
+                            anim.questionSprite.position.set(0, 1.2, 0);
+                            pd.mesh.add(anim.questionSprite);
+                        }
+                        // Grow ❓ with pop-in
+                        if (anim.questionSprite) {
+                            const popScale = Math.min(1.0, anim.timer * 4);
+                            const bounce = popScale < 1.0 ? popScale : 1.0 + Math.sin(anim.timer * 8) * 0.1;
+                            anim.questionSprite.scale.set(bounce, bounce, 1);
+                        }
+                        // Subtle confused wobble
+                        pd.mesh.rotation.z = Math.sin(anim.timer * 12) * 0.1;
+                        if (anim.timer > 2.0) {
+                            // Remove ❓ and start falling
+                            if (anim.questionSprite) { pd.mesh.remove(anim.questionSprite); anim.questionSprite = null; }
+                            pd.mesh.rotation.z = 0;
+                            anim.phase = 3; anim.timer = 0;
+                            playSound('fall');
+                        }
+                        return;
+                    } else if (anim.phase === 3) {
+                        // Phase 3: Brief dramatic pause (looking down)
+                        if (anim.timer > 0.15) {
+                            anim.phase = 4; anim.timer = 0;
+                        }
+                        return;
+                    } else if (anim.phase === 4) {
+                        // Phase 4: Piece falls into the abyss
+                        pd.mesh.position.y -= delta * 8;
+                        pd.mesh.rotation.x += delta * 4;
+                        pd.mesh.rotation.z += delta * 3;
+                        pd.mesh.scale.setScalar(Math.max(0.3, 1.0 - anim.timer * 0.3));
+                        if (pd.mesh.position.y < -10 || anim.timer > 2.8) {
+                            anim.phase = 5; anim.timer = 0;
+                            // Teleport above return position
+                            const rw = anim.returnWorldPos;
+                            pd.mesh.position.set(rw.x, 12, rw.z);
+                            pd.mesh.rotation.set(0, 0, 0);
+                            pd.mesh.scale.set(1, 1, 1);
+                        }
+                        return;
+                    } else if (anim.phase === 5) {
+                        // Phase 5: Piece falls from sky back to safety
+                        pd.mesh.position.y -= delta * 12;
+                        if (pd.mesh.position.y <= 0.4) {
+                            pd.mesh.position.y = 0.4;
+                            pd.targetPos.set(anim.returnWorldPos.x, 0.4, anim.returnWorldPos.z);
+                            pd.startPos = pd.mesh.position.clone();
+                            pd.squashTimer = 1.5;
+                            pd.easterEggAnim = null;
+                            playSound('land_safe');
+                            spawnCustomParticles(['💨', '☁️', '✨'], anim.returnWorldPos, 15);
+                            // NOW activate the banana timer for this team (after the fall is complete)
+                            const team = pd.team;
+                            if (engine.bananaTimers[team].pending) {
+                                engine.bananaTimers[team].active = true;
+                                engine.bananaTimers[team].pending = false;
+                                // Hide the resting banana, replace with timer sprite
+                                anim.bananaMesh.visible = false;
+                                // Show the timer sprite now
+                                const denPos = getWorldPos(3, team === 0 ? 0 : 8);
+                                if (bananaTimerSprites[team]) gameGroup.remove(bananaTimerSprites[team]);
+                                bananaTimerSprites[team] = createBananaTimerSprite(engine.bananaTimers[team].turnsLeft);
+                                bananaTimerSprites[team].position.set(denPos.x, 1.5, denPos.z);
+                                gameGroup.add(bananaTimerSprites[team]);
+                            }
+                        }
+                        return;
+                    }
+                }
+
                 if (pd.isMoving) {
                     pd.moveProgress += delta * 2.5;
                     if (pd.moveProgress >= 1.0) {
