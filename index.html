@@ -375,13 +375,15 @@
         // THREE.JS SETUP & GRÁFICOS
         // ==========================================/
         const scene = new THREE.Scene();
+        let bgTexture = null;
         const loader = new THREE.TextureLoader();
         const texture = loader.load(
           'assets/bg2.webp',
           () => {
             texture.mapping = THREE.EquirectangularReflectionMapping;
             texture.colorSpace = THREE.SRGBColorSpace;
-            scene.background = texture;
+            bgTexture = texture;
+            if (!isARSession) scene.background = bgTexture;
           });
         const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
         
@@ -777,11 +779,28 @@
         function initP2PHost() {
             if (peer) return;
             const roomCode = Math.random().toString(36).substring(2, 8);
+            
+            // 1. Gera o link instantaneamente no momento do clique
+            const link = window.location.href.split('?')[0] + '?room=' + roomCode;
+            
+            // 2. Copia para o Clipboard automaticamente (Fallback PC/Geral)
+            fallbackCopyTextToClipboard(link);
+            btnInvite.material.map = createTextSprite("Link Copiado!", 50, 512, 128, '#000000', '#ffeb3b').material.map;
+            updateStatusText("Iniciando sala...");
+
+            // 3. Dispara o Compartilhamento Nativo do celular (Web Share API)
+            // Precisa acontecer de forma síncrona com o clique do usuário
+            if (navigator.share) {
+                navigator.share({
+                    title: 'Jungle Chess 3D',
+                    text: 'Venha jogar Jungle Chess comigo! Clique no link para entrar na minha mesa:',
+                    url: link
+                }).catch((error) => console.log('Erro ao compartilhar:', error));
+            }
+
+            // 4. Inicia a conexão P2P
             peer = new Peer(roomCode);
             peer.on('open', (id) => {
-                const link = window.location.href.split('?')[0] + '?room=' + id;
-                fallbackCopyTextToClipboard(link);
-                btnInvite.material.map = createTextSprite("Link Copiado!", 50, 512, 128, '#000000', '#ffeb3b').material.map;
                 updateStatusText("Aguardando oponente entrar...");
                 updateGameTitle("Multiplayer: Sala ABERTA");
             });
@@ -821,7 +840,7 @@
                 return;
             }
 
-            // FIX: Ignorar peças que ainda estão no processo de encolher/morrer na board visual
+            // Ignorar peças que ainda estão no processo de encolher/morrer na board visual
             const cpuPieces = pieceMeshes.filter(p => p.team === 0 && !p.isDead && !p.isDying);
             let possibleMoves = [];
 
@@ -874,7 +893,7 @@
                 selectedPiece = chosenMove.piece;
                 tryMove(chosenMove.x, chosenMove.y);
             } else {
-                // FIX: Se as peças da CPU estiverem bloqueadas e presas sem saídas possíveis, passa a vez
+                // Se as peças da CPU estiverem bloqueadas e presas sem saídas possíveis, passa a vez
                 // Evita que o motor procure jogadas ao infinito travando a CPU
                 engine.currentTurn = 1;
             }
@@ -1307,7 +1326,11 @@
             const intersects = raycaster.intersectObjects(intersectables, true)
                 .filter(hit => {
                     const ud = hit.object.userData; if (!ud) return false;
-                    if (currentScene === 'game') return (ud.isPiece && ud.pieceData && !ud.pieceData.isDead) || ud.isTile || ud.isHUDButton;
+                    if (currentScene === 'game') {
+                        // Ignora o raycast para a peça atualmente selecionada (efeito "pointer-events: none")
+                        if (ud.isPiece && ud.pieceData === selectedPiece) return false;
+                        return (ud.isPiece && ud.pieceData && !ud.pieceData.isDead) || ud.isTile || ud.isHUDButton;
+                    }
                     else return ud.isMenuBtn;
                 });
             if (intersects.length > 0) handleInteraction(intersects[0]);
@@ -1368,36 +1391,29 @@
         const line = new THREE.Line(geometry, new THREE.LineBasicMaterial({ color: 0xffffff })); line.name = 'line'; line.scale.z = 5;
         controller1.add(line.clone()); controller2.add(line.clone());
 
-        let controller1Selected = false, controller2Selected = false, isZoomingVR = false;
-        let initialControllerDist = 0;
-        const initialGameScaleVR = new THREE.Vector3();
+        let controller1Selected = false, controller2Selected = false;
+        let grip1Active = false, grip2Active = false;
+        
+        // Variáveis do sistema de "Esfera Invisível" (6DOF Manipulação VR)
+        let isDoubleGripping = false;
+        let isSingleGripping = false;
+        let activeSingleController = null;
+        let initialGripMatrix = new THREE.Matrix4();
+        let initialGripM = new THREE.Vector3();
+        let initialGripV = new THREE.Vector3();
+        let initialGripDist = 0;
+        let initialSinglePanPos = new THREE.Vector3();
+        let initialGameGroupPos = new THREE.Vector3();
 
         controller1.addEventListener('selectstart', () => { controller1Selected = true; });
-        controller1.addEventListener('selectend', () => { controller1Selected = false; if (isZoomingVR) { gameGroup.userData.targetScale = gameGroup.scale.x; } isZoomingVR = false; });
+        controller1.addEventListener('selectend', () => { controller1Selected = false; });
         controller2.addEventListener('selectstart', () => { controller2Selected = true; });
-        controller2.addEventListener('selectend', () => { controller2Selected = false; if (isZoomingVR) { gameGroup.userData.targetScale = gameGroup.scale.x; } isZoomingVR = false; });
+        controller2.addEventListener('selectend', () => { controller2Selected = false; });
 
-        let isPanning = false;
-        let panningController = null;
-        const initialPanPosition = new THREE.Vector3();
-
-        function onSqueezeStart(event) {
-            if (isZoomingVR) return;
-            isPanning = true;
-            panningController = event.target;
-            initialPanPosition.copy(panningController.position);
-        }
-
-        function onSqueezeEnd() {
-            isPanning = false;
-            panningController = null;
-        }
-
-        controller1.addEventListener('squeezestart', onSqueezeStart);
-        controller1.addEventListener('squeezeend', onSqueezeEnd);
-        controller2.addEventListener('squeezestart', onSqueezeStart);
-        controller2.addEventListener('squeezeend', onSqueezeEnd);
-
+        controller1.addEventListener('squeezestart', () => grip1Active = true);
+        controller1.addEventListener('squeezeend', () => grip1Active = false);
+        controller2.addEventListener('squeezestart', () => grip2Active = true);
+        controller2.addEventListener('squeezeend', () => grip2Active = false);
 
         function onSelectXR(event) {
             initAudio(); const controller = event.target;
@@ -1426,7 +1442,11 @@
             const intersects = raycaster.intersectObjects(intersectables, true)
                 .filter(hit => {
                     const ud = hit.object.userData; if (!ud) return false;
-                    if (currentScene === 'game') return (ud.isPiece && ud.pieceData && !ud.pieceData.isDead) || ud.isTile || ud.isHUDButton;
+                    if (currentScene === 'game') {
+                        // Ignora o raycast para a peça atualmente selecionada no VR também
+                        if (ud.isPiece && ud.pieceData === selectedPiece) return false;
+                        return (ud.isPiece && ud.pieceData && !ud.pieceData.isDead) || ud.isTile || ud.isHUDButton;
+                    }
                     else return ud.isMenuBtn;
                 });
             if (intersects.length > 0) handleInteraction(intersects[0]);
@@ -1436,13 +1456,23 @@
         
         renderer.xr.addEventListener('sessionstart', (e) => {
             isARSession = renderer.xr.getSession().mode === 'immersive-ar';
-            if (isARSession) { document.getElementById('ar-overlay').style.display = 'block'; gameGroup.position.set(0, -1000, 0); isARPlaced = false; }
-            else { gameGroup.position.set(0, 1, -2); gameGroup.scale.set(0.5, 0.5, 0.5); }
+            if (isARSession) { 
+                document.getElementById('ar-overlay').style.display = 'block'; 
+                gameGroup.position.set(0, -1000, 0); 
+                isARPlaced = false; 
+                scene.background = null; // Garante que o fundo seja transparente para o Passthrough da Câmera (AR)
+            }
+            else { 
+                gameGroup.position.set(0, 1, -2); 
+                gameGroup.scale.set(0.5, 0.5, 0.5); 
+                scene.background = bgTexture; // Restaura o céu no VR
+            }
         });
         renderer.xr.addEventListener('sessionend', () => {
             isARSession = false; hitTestSourceRequested = false; hitTestSource = null;
             document.getElementById('ar-overlay').style.display = 'none';
             gameGroup.position.set(0,0,0); gameGroup.scale.set(1,1,1);
+            scene.background = bgTexture; // Restaura o céu nativo 3D fora do XR
         });
 
         window.addEventListener('resize', () => { 
@@ -1464,28 +1494,90 @@
         function handleXRInput(delta) {
             if (!renderer.xr.isPresenting) return;
         
-            // Handle Panning
-            if (isPanning && panningController) {
-                const currentPanPosition = panningController.position.clone();
-                const panDelta = currentPanPosition.sub(initialPanPosition);
-                gameGroup.position.add(panDelta);
-                initialPanPosition.copy(panningController.position);
+            // Manipulação Espacial 6DOF (Esfera Invisível entre os dois Grips)
+            if (grip1Active && grip2Active) {
+                if (!isDoubleGripping) {
+                    isDoubleGripping = true;
+                    isSingleGripping = false; // Cancela interações de grip único
+                    // Calcula a esfera inicial: Centro (M) e Vetor Diretor (V)
+                    initialGripM.addVectors(grip1.position, grip2.position).multiplyScalar(0.5);
+                    initialGripV.subVectors(grip2.position, grip1.position);
+                    initialGripDist = initialGripV.length();
+                    initialGripMatrix.copy(gameGroup.matrix);
+                }
+
+                // Atualizações contínuas no frame corrente
+                const currentM = new THREE.Vector3().addVectors(grip1.position, grip2.position).multiplyScalar(0.5);
+                const currentV = new THREE.Vector3().subVectors(grip2.position, grip1.position);
+                const currentDist = currentV.length();
+
+                if (initialGripDist > 0.01 && currentDist > 0.01) {
+                    const scale = currentDist / initialGripDist;
+                    const q = new THREE.Quaternion().setFromUnitVectors(
+                        initialGripV.clone().normalize(),
+                        currentV.clone().normalize()
+                    );
+
+                    // Constrói a Matriz de Transformação Mágica (Translate * Rotate * Scale * -Translate)
+                    // Aplica as rotações 3D da "Esfera", o centro XYZ e o tamanho/zoom
+                    const m = new THREE.Matrix4();
+                    m.makeTranslation(currentM.x, currentM.y, currentM.z); 
+                    m.multiply(new THREE.Matrix4().makeRotationFromQuaternion(q)); 
+                    m.scale(new THREE.Vector3(scale, scale, scale)); 
+                    m.multiply(new THREE.Matrix4().makeTranslation(-initialGripM.x, -initialGripM.y, -initialGripM.z)); 
+                    m.multiply(initialGripMatrix);
+
+                    gameGroup.matrix.copy(m);
+                    gameGroup.matrix.decompose(gameGroup.position, gameGroup.quaternion, gameGroup.scale);
+                    
+                    // Previne anomalias de escala extrema
+                    gameGroup.scale.clampScalar(0.05, 10.0);
+                    
+                    // Protege de snap-backs ao soltar a mesa e desativar o modo especial
+                    gameGroup.userData.targetScale = gameGroup.scale.x;
+                    gameGroup.userData.targetY = gameGroup.position.y;
+                }
+            } else if (grip1Active || grip2Active) {
+                // Manipulação simples com um grip apenas (Panning XYZ tradicional)
+                if (isDoubleGripping) {
+                    isDoubleGripping = false;
+                    isSingleGripping = false;
+                }
+                const activeCtrl = grip1Active ? grip1 : grip2;
+                if (!isSingleGripping) {
+                    isSingleGripping = true;
+                    activeSingleController = activeCtrl;
+                    initialSinglePanPos.copy(activeCtrl.position);
+                    initialGameGroupPos.copy(gameGroup.position);
+                } else if (activeSingleController === activeCtrl) {
+                    const panDelta = new THREE.Vector3().subVectors(activeCtrl.position, initialSinglePanPos);
+                    gameGroup.position.copy(initialGameGroupPos).add(panDelta);
+                    gameGroup.userData.targetY = gameGroup.position.y;
+                }
+            } else {
+                isDoubleGripping = false;
+                isSingleGripping = false;
             }
         
-            // Handle Rotation
-            [controller1, controller2].forEach(controller => {
-                if (controller.gamepad && controller.gamepad.axes.length >= 2) {
-                    const thumbstickX = controller.gamepad.axes[2];
-                    const thumbstickY = controller.gamepad.axes[3];
-        
-                    if (Math.abs(thumbstickX) > 0.1) {
-                        gameGroup.rotation.y -= thumbstickX * delta * 2;
-                    }
-                    if (Math.abs(thumbstickY) > 0.1) {
-                        gameGroup.rotation.x -= thumbstickY * delta * 2;
+            // Rotação por Thumbstick aprimorada (Acessando inputsources dinamicamente)
+            if (!isDoubleGripping) {
+                const session = renderer.xr.getSession();
+                if (session && session.inputSources) {
+                    for (const source of session.inputSources) {
+                        if (source.gamepad && source.gamepad.axes.length >= 4) {
+                            const thumbstickX = source.gamepad.axes[2];
+                            const thumbstickY = source.gamepad.axes[3];
+                
+                            if (Math.abs(thumbstickX) > 0.1) {
+                                gameGroup.rotation.y -= thumbstickX * delta * 2;
+                            }
+                            if (Math.abs(thumbstickY) > 0.1) {
+                                gameGroup.rotation.x -= thumbstickY * delta * 2;
+                            }
+                        }
                     }
                 }
-            });
+            }
         }
 
         function render(timestamp, frame) {
@@ -1505,7 +1597,6 @@
 
             // GATILHO DA IA (CPU)
             if (currentScene === 'game' && gameMode === 'cpu' && engine.currentTurn === 0 && !isCPUThinking && engine.winner === null && !restarting) {
-                // FIX: Agora também verifica se há peças no status de morte (.isDying)
                 const isAnyPieceMoving = pieceMeshes.some(p => p.isMoving || p.isMorphing || p.squashTimer > 0 || p.trapAnimState > 0 || p.captureAnimTimer > 0 || p.isDying);
                 if (!isAnyPieceMoving) {
                     isCPUThinking = true;
@@ -1514,7 +1605,7 @@
             }
 
             // =====================================
-            // UI Dinâmica de Status (Otimizado)
+            // UI Dinâmica de Status
             // =====================================
             if (currentScene === 'game') {
                 const statusDiv = document.getElementById('status');
@@ -1537,26 +1628,10 @@
                 }
             }
             
-            if (controller1Selected && controller2Selected) {
-                if (!isZoomingVR) {
-                    isZoomingVR = true;
-                    initialControllerDist = grip1.position.distanceTo(grip2.position);
-                    initialGameScaleVR.copy(gameGroup.scale);
-                }
-                const currentDist = grip1.position.distanceTo(grip2.position);
-                if (initialControllerDist > 0.01) {
-                    const scaleFactor = currentDist / initialControllerDist;
-                    const newScale = initialGameScaleVR.clone().multiplyScalar(scaleFactor);
-                    newScale.clampScalar(0.1, 2.0);
-                    gameGroup.scale.copy(newScale);
-                }
-            } else {
-                isZoomingVR = false;
-            }
-
             if(controls.userData) {
                 currentGyroOffset.lerp(targetGyroOffset, 5 * delta);
                 const finalTarget = controls.userData.target.clone();
+                // Apenas aplica deslocamento do Giroscópio fora do WebXR
                 if (!renderer.xr.isPresenting) {
                     finalTarget.x += currentGyroOffset.x;
                     finalTarget.z += currentGyroOffset.y;
@@ -1571,13 +1646,16 @@
                 }
             }
 
-            if (!isPinching && !isZoomingVR) {
+            // Impede que as transições interfiram com a escala e pan se o controle duplo/pinch estiver ativo
+            if (!isPinching && !isDoubleGripping) {
                 const s = THREE.MathUtils.lerp(gameGroup.scale.y, gameGroup.userData.targetScale, 4 * delta);
                 if (Math.abs(s - gameGroup.userData.targetScale) > 0.001) {
                     gameGroup.scale.set(s,s,s);
                 }
             }
-            gameGroup.position.y = THREE.MathUtils.lerp(gameGroup.position.y, gameGroup.userData.targetY, 4 * delta);
+            if (!isDoubleGripping && !isSingleGripping) {
+                gameGroup.position.y = THREE.MathUtils.lerp(gameGroup.position.y, gameGroup.userData.targetY, 4 * delta);
+            }
             
             const targetRedLight = engine.currentTurn === 0 ? 6.0 : 1.8;
             const targetGreenLight = engine.currentTurn === 1 ? 6.0 : 1.8;
@@ -1669,6 +1747,15 @@
                         pd.mesh.visible = false;
                         pd.isDying = false;
                         pd.isDead = true;
+                        
+                        // FIX: Limpar todas as flags de animação fantasma da peça morta 
+                        // para não causar soft-lock infinito no ciclo da Inteligência Artificial
+                        pd.isMorphing = false;
+                        pd.isBigAnim = false;
+                        pd.squashTimer = 0;
+                        pd.trapAnimState = 0;
+                        pd.captureAnimTimer = 0;
+
                         if (engine.getPieceAt(pd.gridX, pd.gridY) === pd) {
                             engine.board[pd.gridX][pd.gridY] = null;
                         }
