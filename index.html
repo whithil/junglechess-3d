@@ -614,13 +614,13 @@
         }
 
         // --- Paineis Principais ---
-        menuGroup.add(createMenuPanel(3.0, 4.0, -0.9));
+        menuGroup.add(createMenuPanel(3.0, 3.4, -0.6));
         localMenuGroup.add(createMenuPanel(3.0, 3.5, 0.0));
         optionsGroup.add(createMenuPanel(3.0, 4.5, 0.0));
         aboutGroup.add(createMenuPanel(4.5, 4.2, 0.0));
         multiplayerGroup.add(createMenuPanel(3.5, 4.0, 0.0));
 
-        menuGroup.add(createCloseButton(3.0, 4.0, -0.9));
+        menuGroup.add(createCloseButton(3.2, 4.2, -0.9));
         localMenuGroup.add(createCloseButton(3.0, 3.5, 0.0));
         optionsGroup.add(createCloseButton(3.0, 4.5, 0.0));
         aboutGroup.add(createCloseButton(4.5, 4.2, 0.0));
@@ -664,15 +664,15 @@
 
         // --- MENU PRINCIPAL ---
         const btnLocalMenu = createTextSprite("Jogo Local", 50, 512, 128, '#000000', '#6B4226').sprite;
-        btnLocalMenu.position.y = 0.5; btnLocalMenu.userData = { isMenuBtn: true, action: 'show_local_menu' }; menuGroup.add(btnLocalMenu);
+        btnLocalMenu.position.y = 0.6; btnLocalMenu.userData = { isMenuBtn: true, action: 'show_local_menu' }; menuGroup.add(btnLocalMenu);
         const btnMulti = createTextSprite("Multiplayer", 50, 512, 128, '#000000', '#615142').sprite;
-        btnMulti.position.y = -0.2; btnMulti.userData = { isMenuBtn: true, action: 'show_multiplayer' }; menuGroup.add(btnMulti);
+        btnMulti.position.y = 0.0; btnMulti.userData = { isMenuBtn: true, action: 'show_multiplayer' }; menuGroup.add(btnMulti);
         const btnOptions = createTextSprite("Opções", 50, 512, 128, '#000000', '#6B4226').sprite;
-        btnOptions.position.y = -0.9; btnOptions.userData = { isMenuBtn: true, action: 'show_options' }; menuGroup.add(btnOptions);
+        btnOptions.position.y = -0.6; btnOptions.userData = { isMenuBtn: true, action: 'show_options' }; menuGroup.add(btnOptions);
         const btnRestart = createTextSprite("Reiniciar", 50, 512, 128, '#000000', '#4F4237').sprite;
-        btnRestart.position.y = -1.6; btnRestart.userData = { isMenuBtn: true, action: 'restart_game' }; btnRestart.visible = false; menuGroup.add(btnRestart);
+        btnRestart.position.y = -1.2; btnRestart.userData = { isMenuBtn: true, action: 'restart_game' }; btnRestart.visible = false; menuGroup.add(btnRestart);
         const btnAbout = createTextSprite("Sobre", 50, 512, 128, '#000000', '#615142').sprite;
-        btnAbout.position.y = -2.3; btnAbout.userData = { isMenuBtn: true, action: 'show_about' }; menuGroup.add(btnAbout);
+        btnAbout.position.y = -1.8; btnAbout.userData = { isMenuBtn: true, action: 'show_about' }; menuGroup.add(btnAbout);
 
         // --- SUBMENU: JOGO LOCAL ---
         const localTitle = createTextSprite("JOGO LOCAL", 80, 512, 128, '#ffeb3b').sprite;
@@ -694,16 +694,16 @@
 
         // --- SUBMENU: OPÇÕES ---
         const optTitle = createTextSprite("OPÇÕES", 80, 512, 128, '#ffeb3b').sprite;
-        optTitle.position.y = 1.5; optionsGroup.add(optTitle);
+        optTitle.position.y = 1.6; optionsGroup.add(optTitle);
         const btnTipsObj = createTextSprite("Dicas e Ajuda: ON", 50, 512, 128, '#000000', '#6B4226');
         const btnTips = btnTipsObj.sprite;
-        btnTips.position.y = 0.5; btnTips.userData = { isMenuBtn: true, action: 'toggle_tips' }; optionsGroup.add(btnTips);
+        btnTips.position.y = 0.8; btnTips.userData = { isMenuBtn: true, action: 'toggle_tips' }; optionsGroup.add(btnTips);
         const btnVR = createTextSprite("Entrar em VR", 50, 512, 128, '#000000', '#615142').sprite;
-        btnVR.position.y = -0.5; btnVR.userData = { isMenuBtn: true, action: 'show_vr' }; optionsGroup.add(btnVR);
+        btnVR.position.y = 0.0; btnVR.userData = { isMenuBtn: true, action: 'show_vr' }; optionsGroup.add(btnVR);
         const btnAR = createTextSprite("Entrar em AR", 50, 512, 128, '#000000', '#6B4226').sprite;
-        btnAR.position.y = -1.5; btnAR.userData = { isMenuBtn: true, action: 'show_ar' }; optionsGroup.add(btnAR);
+        btnAR.position.y = -0.8; btnAR.userData = { isMenuBtn: true, action: 'show_ar' }; optionsGroup.add(btnAR);
         const btnOptBack = createTextSprite("Voltar", 50, 512, 128, '#000000', '#4F4237').sprite;
-        btnOptBack.position.y = -2.5; btnOptBack.userData = { isMenuBtn: true, action: 'show_menu' }; optionsGroup.add(btnOptBack);
+        btnOptBack.position.y = -1.6; btnOptBack.userData = { isMenuBtn: true, action: 'show_menu' }; optionsGroup.add(btnOptBack);
 
 
         // --- SUBMENU: SOBRE ---
@@ -735,7 +735,7 @@
             if (controls.userData) { controls.userData.target.set(0, targetControlsY, 0); }
 
             if (currentScene === 'game') {
-                camera.userData.targetPos.set(0, 6, 6.5); 
+                camera.userData.targetPos.set(0, 7, 8); 
             } else {
                 camera.userData.targetPos.set(0, 7, 8); 
             }
@@ -1377,6 +1377,28 @@
         controller2.addEventListener('selectstart', () => { controller2Selected = true; });
         controller2.addEventListener('selectend', () => { controller2Selected = false; if (isZoomingVR) { gameGroup.userData.targetScale = gameGroup.scale.x; } isZoomingVR = false; });
 
+        let isPanning = false;
+        let panningController = null;
+        const initialPanPosition = new THREE.Vector3();
+
+        function onSqueezeStart(event) {
+            if (isZoomingVR) return;
+            isPanning = true;
+            panningController = event.target;
+            initialPanPosition.copy(panningController.position);
+        }
+
+        function onSqueezeEnd() {
+            isPanning = false;
+            panningController = null;
+        }
+
+        controller1.addEventListener('squeezestart', onSqueezeStart);
+        controller1.addEventListener('squeezeend', onSqueezeEnd);
+        controller2.addEventListener('squeezestart', onSqueezeStart);
+        controller2.addEventListener('squeezeend', onSqueezeEnd);
+
+
         function onSelectXR(event) {
             initAudio(); const controller = event.target;
             isTransitioningCamera = false;
@@ -1439,8 +1461,37 @@
 
         function animate() { renderer.setAnimationLoop(render); }
 
+        function handleXRInput(delta) {
+            if (!renderer.xr.isPresenting) return;
+        
+            // Handle Panning
+            if (isPanning && panningController) {
+                const currentPanPosition = panningController.position.clone();
+                const panDelta = currentPanPosition.sub(initialPanPosition);
+                gameGroup.position.add(panDelta);
+                initialPanPosition.copy(panningController.position);
+            }
+        
+            // Handle Rotation
+            [controller1, controller2].forEach(controller => {
+                if (controller.gamepad && controller.gamepad.axes.length >= 2) {
+                    const thumbstickX = controller.gamepad.axes[2];
+                    const thumbstickY = controller.gamepad.axes[3];
+        
+                    if (Math.abs(thumbstickX) > 0.1) {
+                        gameGroup.rotation.y -= thumbstickX * delta * 2;
+                    }
+                    if (Math.abs(thumbstickY) > 0.1) {
+                        gameGroup.rotation.x -= thumbstickY * delta * 2;
+                    }
+                }
+            });
+        }
+
         function render(timestamp, frame) {
             const delta = clock.getDelta(); const time = clock.getElapsedTime();
+
+            handleXRInput(delta);
 
             if (restarting) {
                 const isTransitionDone = Math.abs(gameGroup.scale.y - gameGroup.userData.targetScale) < 0.001;
