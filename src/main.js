@@ -1206,21 +1206,49 @@ function createBananaTimerSprite(turnsLeft) {
 // ==========================================/
 function createPieceMaterial(rank, team) {
     const data = RANKS[rank], tData = TEAMS[team];
+    const monkeyPurple = TEAMS[2].color; // #9B59B6
+
     const cTop = document.createElement('canvas'); cTop.width = cTop.height = 256; const ctxTop = cTop.getContext('2d');
     ctxTop.fillStyle = tData.color; ctxTop.fillRect(0, 0, 256, 256);
+
+    // Graphic artifice for Allied Monkeys (peppermint pattern)
+    if (rank === 9 && team !== 2) {
+        ctxTop.strokeStyle = monkeyPurple;
+        ctxTop.lineWidth = 30; // Thicker stripes for peppermint look
+        for (let i = -256; i < 512; i += 60) {
+            ctxTop.beginPath(); ctxTop.moveTo(i, 0); ctxTop.lineTo(i + 256, 256); ctxTop.stroke();
+        }
+    }
+
     ctxTop.fillStyle = '#fff'; ctxTop.textAlign = 'center'; ctxTop.textBaseline = 'middle'; ctxTop.font = 'bold 160px sans-serif';
     ctxTop.fillText(rank.toString(), 128, 140); ctxTop.strokeStyle = '#000'; ctxTop.lineWidth = 4; ctxTop.strokeText(rank.toString(), 128, 140);
+
     const cSide = document.createElement('canvas'); cSide.width = 1024; cSide.height = 280; const ctxSide = cSide.getContext('2d');
     ctxSide.fillStyle = tData.color; ctxSide.fillRect(0, 0, 1024, 280);
+
+    // Graphic artifice for Allied Monkeys on the side (peppermint pattern)
+    if (rank === 9 && team !== 2) {
+        ctxSide.strokeStyle = monkeyPurple;
+        ctxSide.lineWidth = 40;
+        for (let i = -280; i < 1024 + 280; i += 80) {
+            ctxSide.beginPath(); ctxSide.moveTo(i, 0); ctxSide.lineTo(i + 280, 280); ctxSide.stroke();
+        }
+    }
+
     ctxSide.fillStyle = '#fff'; ctxSide.textAlign = 'center'; ctxSide.textBaseline = 'middle'; ctxSide.font = 'bold 100px sans-serif';
     ctxSide.fillText(`${data.icon} ${data.name.toUpperCase()} ${data.icon}`, 512, 140);
+
     const texTop = new THREE.CanvasTexture(cTop); texTop.center.set(0.5, 0.5);
     const texSide = new THREE.CanvasTexture(cSide);
     const matConfig = { roughness: 0.6, metalness: 0.1, clearcoat: 0.3, clearcoatRoughness: 0.8 };
+
+    // Default bottom color logic
+    const bottomColor = (rank === 9 && team !== 2) ? monkeyPurple : tData.color;
+
     return [
         new THREE.MeshPhysicalMaterial({ map: texSide, ...matConfig }),
         new THREE.MeshPhysicalMaterial({ map: texTop, ...matConfig }),
-        new THREE.MeshPhysicalMaterial({ color: tData.color, ...matConfig })
+        new THREE.MeshPhysicalMaterial({ color: bottomColor, ...matConfig })
     ];
 }
 
@@ -1368,7 +1396,7 @@ function initPieces() {
             const hitBox = new THREE.Mesh(hitBoxGeo, hitBoxMat);
 
             const pieceData = {
-                gridX: setup.x, gridY: setup.y, team: setup.ally, rank: 9, allyTeam: setup.ally,
+                gridX: setup.x, gridY: setup.y, team: 2, rank: 9, allyTeam: setup.ally,
                 mesh: group, cylinder: cylinder, sprite: sprite, startPos: group.position.clone(), targetPos: group.position.clone(),
                 isMoving: false, moveProgress: 0, squashTimer: 0, capturedPiece: null, isVictoryPending: false,
                 isDying: false, isDead: false, isMorphing: false, morphTimer: 0, isBigAnim: false, captureAnimTimer: 0,
@@ -1593,6 +1621,9 @@ function tryMove(endX, endY, isRemote = false) {
         const isRat = selectedPiece.rank === 1;
         const moveResult = engine.executeMove(selectedPiece, endX, endY);
         const captured = moveResult.captured;
+
+        logBattle(selectedPiece, startX, startY, endX, endY, captured);
+
         const targetWorld = getWorldPos(endX, endY);
 
         // Easter egg visual activation
