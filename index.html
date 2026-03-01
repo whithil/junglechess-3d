@@ -114,6 +114,32 @@
         @media (max-width: 600px) {
             #smartphone { width: calc(100% - 40px); height: 350px; }
         }
+
+        /* --- Estilos dos Botões XR Nativos (Fix de Sobreposição) --- */
+        #xr-container {
+            position: absolute;
+            bottom: 20px;
+            left: 0;
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            pointer-events: none;
+            z-index: 1000;
+        }
+        /* O !important força o Flexbox a anular o position:absolute injetado pelo Three.js */
+        #xr-container button {
+            position: relative !important;
+            left: auto !important;
+            bottom: auto !important;
+            transform: none !important;
+            margin: 0 !important;
+            pointer-events: auto;
+        }
+        /* Oculta os que forem marcados como não suportados pelo MutationObserver */
+        #xr-container button.unsupported {
+            display: none !important;
+        }
         /* ------------------------------------------- */
 
         #ar-overlay {
@@ -245,7 +271,6 @@
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
         import { VRButton } from 'three/addons/webxr/VRButton.js';
         import { ARButton } from 'three/addons/webxr/ARButton.js';
-        import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
         import { FontLoader } from 'three/addons/loaders/FontLoader.js';
         import { TextGeometry } from 'three/addons/geometries/TextGeometry.js';
 
@@ -679,13 +704,33 @@
         renderer.xr.enabled = true; renderer.shadowMap.enabled = true;
         document.body.appendChild(renderer.domElement);
 
-        const vrButton = VRButton.createButton(renderer);
-        vrButton.style.display = 'none';
-        document.body.appendChild(vrButton);
+        // --- SISTEMA INTELIGENTE DE BOTÕES XR ---
+        const xrContainer = document.createElement('div');
+        xrContainer.id = 'xr-container';
+        document.body.appendChild(xrContainer);
 
+        const vrButton = VRButton.createButton(renderer);
         const arButton = ARButton.createButton(renderer);
-        arButton.style.display = 'none';
-        document.body.appendChild(arButton);
+        
+        xrContainer.appendChild(vrButton);
+        xrContainer.appendChild(arButton);
+
+        const updateXRButtons = () => {
+            [vrButton, arButton].forEach(btn => {
+                if (btn.textContent.toUpperCase().includes('NOT SUPPORTED')) {
+                    btn.classList.add('unsupported');
+                } else {
+                    btn.classList.remove('unsupported');
+                }
+            });
+        };
+
+        const xrObserver = new MutationObserver(updateXRButtons);
+        xrObserver.observe(vrButton, { childList: true, characterData: true, subtree: true });
+        xrObserver.observe(arButton, { childList: true, characterData: true, subtree: true });
+        
+        updateXRButtons(); 
+        // ----------------------------------------
 
         const controls = new OrbitControls(camera, renderer.domElement);
         controls.target.set(0, 0, 0); controls.update();
@@ -1014,7 +1059,9 @@
             aboutGroup.visible = currentScene === 'about';
             multiplayerGroup.visible = currentScene === 'multiplayer';
 
-            gameGroup.userData.targetY = targetGameY;
+            if (!renderer.xr.isPresenting) {
+                gameGroup.userData.targetY = targetGameY;
+            }
 
             const targetControlsY = currentScene === 'game' ? 0 : 0.8; 
             if (controls.userData) { controls.userData.target.set(0, targetControlsY, 0); }
@@ -1052,6 +1099,8 @@
                 
                 hasGameStarted = true;
                 closeButtons.forEach(b => b.visible = true);
+                
+                gameGroup.rotation.y = isHost ? 0 : Math.PI;
                 
                 switchScene('game');
                 restarting = true;
@@ -1699,6 +1748,7 @@
             if (action === 'show_local_menu') { switchScene('local_menu'); }
             else if (action === 'start_game_pvp') { 
                 gameMode = 'pvp';
+                gameGroup.rotation.y = 0; 
                 updateGameTitle("Local PVP");
                 btnRestart.visible = true;
                 
@@ -1710,6 +1760,7 @@
             } 
             else if (action === 'start_game_cpu') { 
                 gameMode = 'cpu';
+                gameGroup.rotation.y = 0; 
                 updateGameTitle("Local V.S. CPU");
                 btnRestart.visible = true;
                 
@@ -1915,9 +1966,19 @@
 
         const controller1 = renderer.xr.getController(0), controller2 = renderer.xr.getController(1);
         scene.add(controller1); scene.add(controller2);
-        const controllerModelFactory = new XRControllerModelFactory();
-        const grip1 = renderer.xr.getControllerGrip(0); grip1.add(controllerModelFactory.createControllerModel(grip1)); scene.add(grip1);
-        const grip2 = renderer.xr.getControllerGrip(1); grip2.add(controllerModelFactory.createControllerModel(grip2)); scene.add(grip2);
+        
+        // Substituído XRControllerModelFactory por geometrias simples para evitar crashes de carregamento assíncrono em WebXR
+        const controllerGeo = new THREE.BoxGeometry(0.04, 0.04, 0.1);
+        const controllerMat = new THREE.MeshStandardMaterial({ color: 0x444444, roughness: 0.8 });
+        
+        const grip1 = renderer.xr.getControllerGrip(0); 
+        grip1.add(new THREE.Mesh(controllerGeo, controllerMat)); 
+        scene.add(grip1);
+        
+        const grip2 = renderer.xr.getControllerGrip(1); 
+        grip2.add(new THREE.Mesh(controllerGeo, controllerMat)); 
+        scene.add(grip2);
+        
         const geometry = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -1)]);
         const line = new THREE.Line(geometry, new THREE.LineBasicMaterial({ color: 0xffffff })); line.name = 'line'; line.scale.z = 5;
         controller1.add(line.clone()); controller2.add(line.clone());
@@ -1953,15 +2014,21 @@
             if (isARSession && !isARPlaced) {
                 if (reticle.visible) {
                     const arPos = new THREE.Vector3().setFromMatrixPosition(reticle.matrix);
-                    arPos.y -= 0.2;
                     gameGroup.position.copy(arPos);
                     gameGroup.scale.set(0.3, 0.3, 0.3);
+                    
+                    gameGroup.userData.targetY = arPos.y; 
+                    gameGroup.userData.targetScale = 0.3; 
+                    
                     isARPlaced = true; reticle.visible = false; document.getElementById('ar-overlay').style.display = 'none';
                 }
                 return;
             }
             const tempMatrix = new THREE.Matrix4(); tempMatrix.identity().extractRotation(controller.matrixWorld);
             raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld); raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
+            
+            raycaster.camera = camera;
+
             let intersectables = [];
             if (currentScene === 'menu') intersectables = menuGroup.children;
             else if (currentScene === 'local_menu') intersectables = localMenuGroup.children;
@@ -1990,12 +2057,17 @@
             if (isARSession) { 
                 document.getElementById('ar-overlay').style.display = 'block'; 
                 gameGroup.position.set(0, -1000, 0); 
+                gameGroup.userData.targetY = -1000; 
                 isARPlaced = false; 
                 scene.background = null; 
             }
             else { 
-                gameGroup.position.set(0, 1, -2); 
-                gameGroup.scale.set(0.5, 0.5, 0.5); 
+                gameGroup.position.set(0, 0.6, -2.0); 
+                gameGroup.scale.set(0.3, 0.3, 0.3); 
+                
+                gameGroup.userData.targetY = 0.6; 
+                gameGroup.userData.targetScale = 0.3;
+                
                 scene.background = bgTexture; 
             }
         });
@@ -2256,8 +2328,15 @@
                 gameGroup.position.y = THREE.MathUtils.lerp(gameGroup.position.y, gameGroup.userData.targetY, 4 * delta);
             }
             
-            const targetRedLight = engine.currentTurn === 0 ? 6.0 : 1.8;
-            const targetGreenLight = engine.currentTurn === 1 ? 6.0 : 1.8;
+            const isFlipped = Math.abs(gameGroup.rotation.y) > 0.1;
+            let targetRedLight = engine.currentTurn === 0 ? 6.0 : 1.8;
+            let targetGreenLight = engine.currentTurn === 1 ? 6.0 : 1.8;
+            
+            if (isFlipped) {
+                targetRedLight = engine.currentTurn === 1 ? 6.0 : 1.8;
+                targetGreenLight = engine.currentTurn === 0 ? 6.0 : 1.8;
+            }
+
             lightRedSide.intensity = THREE.MathUtils.lerp(lightRedSide.intensity, targetRedLight, delta * 4);
             lightGreenSide.intensity = THREE.MathUtils.lerp(lightGreenSide.intensity, targetGreenLight, delta * 4);
 
@@ -2283,8 +2362,13 @@
             if (selectedPiece && currentScene === 'game') {
                 auraLight.intensity = THREE.MathUtils.lerp(auraLight.intensity, 4.0, delta * 10);
                 auraLight.color.copy(selectedPiece.baseTeamColor);
-                auraLight.position.x = THREE.MathUtils.lerp(auraLight.position.x, selectedPiece.mesh.position.x, delta * 15);
-                auraLight.position.z = THREE.MathUtils.lerp(auraLight.position.z, selectedPiece.mesh.position.z, delta * 15);
+                
+                const worldPos = new THREE.Vector3();
+                selectedPiece.mesh.getWorldPosition(worldPos);
+                
+                auraLight.position.x = THREE.MathUtils.lerp(auraLight.position.x, worldPos.x, delta * 15);
+                auraLight.position.z = THREE.MathUtils.lerp(auraLight.position.z, worldPos.z, delta * 15);
+                auraLight.position.y = worldPos.y + 0.5; 
             } else { auraLight.intensity = THREE.MathUtils.lerp(auraLight.intensity, 0, delta * 10); }
 
             tileMeshes.forEach(tile => {
@@ -2314,7 +2398,12 @@
             trapTextMat.map.rotation = snapAngle;
             
             [menuGroup, localMenuGroup, optionsGroup, aboutGroup, multiplayerGroup].forEach(grp => {
-                if(grp.visible) { grp.lookAt(camera.position); grp.position.y = 2.5 + Math.sin(time * 2) * 0.1; }
+                if(grp.visible) { 
+                    grp.lookAt(camera.position); 
+                    
+                    const menuBaseY = renderer.xr.isPresenting ? (camera.position.y || 1.5) : 2.5;
+                    grp.position.y = menuBaseY + Math.sin(time * 2) * 0.1; 
+                }
             });
 
             pieceMeshes.forEach(pd => {
