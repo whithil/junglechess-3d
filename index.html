@@ -273,6 +273,7 @@
         import { ARButton } from 'three/addons/webxr/ARButton.js';
         import { FontLoader } from 'three/addons/loaders/FontLoader.js';
         import { TextGeometry } from 'three/addons/geometries/TextGeometry.js';
+        import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
 
         // ==========================================/
         // ESTADOS DO JOGO (STATE MACHINE & MULTIPLAYER)
@@ -1967,24 +1968,72 @@
         reticle = new THREE.Mesh(new THREE.RingGeometry(0.15, 0.2, 32).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xffffff }));
         reticle.matrixAutoUpdate = false; reticle.visible = false; scene.add(reticle);
 
-        const controller1 = renderer.xr.getController(0), controller2 = renderer.xr.getController(1);
-        scene.add(controller1); scene.add(controller2);
-        
-        // Substituído XRControllerModelFactory por geometrias simples para evitar crashes de carregamento assíncrono em WebXR
-        const controllerGeo = new THREE.BoxGeometry(0.04, 0.04, 0.1);
-        const controllerMat = new THREE.MeshStandardMaterial({ color: 0x444444, roughness: 0.8 });
-        
-        const grip1 = renderer.xr.getControllerGrip(0); 
-        grip1.add(new THREE.Mesh(controllerGeo, controllerMat)); 
-        scene.add(grip1);
-        
-        const grip2 = renderer.xr.getControllerGrip(1); 
-        grip2.add(new THREE.Mesh(controllerGeo, controllerMat)); 
-        scene.add(grip2);
-        
-        const geometry = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -1)]);
-        const line = new THREE.Line(geometry, new THREE.LineBasicMaterial({ color: 0xffffff })); line.name = 'line'; line.scale.z = 5;
-        controller1.add(line.clone()); controller2.add(line.clone());
+        // --- SISTEMA ROBUSTO E SEGURO DE COMANDOS VR ---
+        const controllerModelFactory = new XRControllerModelFactory();
+
+        function setupVRController(index) {
+            const controller = renderer.xr.getController(index);
+            const grip = renderer.xr.getControllerGrip(index);
+            
+            // Fallback: Bastão/Cilindro elegante (melhor que o cubo antigo)
+            const fallbackGroup = new THREE.Group();
+            const handleGeo = new THREE.CylinderGeometry(0.015, 0.015, 0.12, 16);
+            handleGeo.rotateX(Math.PI / 2); // Deitar o bastão para apontar para a frente
+            const handleMat = new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.8 });
+            const handleMesh = new THREE.Mesh(handleGeo, handleMat);
+            fallbackGroup.add(handleMesh);
+            grip.add(fallbackGroup);
+
+            let factoryModel = null;
+
+            // Escuta a conexão para ler o perfil do dispositivo de forma segura
+            controller.addEventListener('connected', (event) => {
+                const profiles = event.data.profiles || [];
+                // Marcas conhecidas que costumam carregar bem no XRControllerModelFactory
+                const isKnownSafe = profiles.some(p => 
+                    p.includes('oculus') || p.includes('meta') || 
+                    p.includes('valve') || p.includes('htc') || p.includes('windows')
+                );
+
+                if (isKnownSafe && !factoryModel) {
+                    factoryModel = controllerModelFactory.createControllerModel(grip);
+                    
+                    // Monkey Patch para capturar o infame erro do 'quaternion' no render loop
+                    const origUpdate = factoryModel.updateMatrixWorld.bind(factoryModel);
+                    factoryModel.updateMatrixWorld = function(force) {
+                        try {
+                            origUpdate(force);
+                            fallbackGroup.visible = false; // Modelo oficial carregou e atualizou sem erro
+                        } catch (e) {
+                            // Se o modelo corromper, escondemos ele e ativamos o fallback instantaneamente
+                            this.visible = false;
+                            fallbackGroup.visible = true;
+                        }
+                    };
+                    
+                    grip.add(factoryModel);
+                }
+            });
+
+            scene.add(controller);
+            scene.add(grip);
+
+            // Linha de laser visível saindo do comando
+            const geometry = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -1)]);
+            const line = new THREE.Line(geometry, new THREE.LineBasicMaterial({ color: 0xffffff })); 
+            line.name = 'line'; line.scale.z = 5;
+            controller.add(line);
+
+            return { controller, grip };
+        }
+
+        const c0 = setupVRController(0);
+        const controller1 = c0.controller;
+        const grip1 = c0.grip;
+
+        const c1 = setupVRController(1);
+        const controller2 = c1.controller;
+        const grip2 = c1.grip;
 
         let controller1Selected = false, controller2Selected = false;
         let grip1Active = false, grip2Active = false;
