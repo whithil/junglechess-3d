@@ -293,6 +293,9 @@
 
         const closeButtons = []; 
 
+        // Rotação alvo global das texturas para permitir histerese (evitar tremida visual VR)
+        let targetSnapAngle = 0;
+
         // Função universal para resetar o tempo ocioso e devolver o telefone à aba original
         function resetIdleTime() {
             idleTime = 0;
@@ -2226,7 +2229,14 @@
                     }
                 }
 
-                if (idleTime > 20.0 && (time - lastGossipTime > 8.0) && pendingReplies.length === 0) {
+                // Ajuste Dinâmico: Se o E-book estiver aberto, as peças "calam-se" por 60s
+                let currentIdleThreshold = 20.0;
+                const manualTab = document.getElementById('tab-manual');
+                if (manualTab && manualTab.classList.contains('active')) {
+                    currentIdleThreshold = 60.0;
+                }
+
+                if (idleTime > currentIdleThreshold && (time - lastGossipTime > 8.0) && pendingReplies.length === 0) {
                     if (alivePieces.length > 0) {
                         const p = alivePieces[Math.floor(Math.random() * alivePieces.length)];
                         const lines = GOSSIP_TEXTS[p.rank];
@@ -2393,9 +2403,17 @@
                 if (p.life <= 0) { gameGroup.remove(p.mesh); activeParticles.splice(i, 1); }
             }
 
-            const camAngle = Math.atan2(camera.position.x, camera.position.z);
-            const snapAngle = Math.round(camAngle / (Math.PI / 2)) * (Math.PI / 2);
-            trapTextMat.map.rotation = snapAngle;
+            const cameraLocalPos = gameGroup.worldToLocal(camera.position.clone());
+            const camAngle = Math.atan2(cameraLocalPos.x, cameraLocalPos.z);
+            
+            let angleDiff = camAngle - targetSnapAngle;
+            angleDiff = Math.atan2(Math.sin(angleDiff), Math.cos(angleDiff)); 
+            
+            if (Math.abs(angleDiff) > (Math.PI / 4) + 0.15) {
+                targetSnapAngle = Math.round(camAngle / (Math.PI / 2)) * (Math.PI / 2);
+            }
+            
+            trapTextMat.map.rotation = targetSnapAngle;
             
             [menuGroup, localMenuGroup, optionsGroup, aboutGroup, multiplayerGroup].forEach(grp => {
                 if(grp.visible) { 
@@ -2500,16 +2518,23 @@
                     pd.sprite.scale.set(1.5, 1.5, 1);
                     if (!pd.isDying && !pd.isBigAnim) { pd.cylinder.visible = true; pd.sprite.visible = false; }
                 }
-                if (!pd.isMorphing && !pd.isDying && !pd.isDead) pd.cylinder.material[1].map.rotation = snapAngle - pd.cylinder.rotation.y;
+                
+                if (!pd.isMorphing && !pd.isDying && !pd.isDead) pd.cylinder.material[1].map.rotation = targetSnapAngle - pd.cylinder.rotation.y;
+                
                 if (!pd.isDead && pd.cylinder && pd.cylinder.material) {
                     const isActiveTurn = (pd.team === engine.currentTurn);
                     const isSelected = (pd === selectedPiece);
                     const targetEmissive = new THREE.Color();
+                    
+                    // CORREÇÃO WEBXR: Emissividade mais suave nos óculos para evitar o efeito "Estouro" neon.
                     if (isSelected) {
-                        targetEmissive.copy(pd.baseTeamColor).multiplyScalar(0.15);
+                        const emissiveIntensity = renderer.xr.isPresenting ? 0.05 : 0.15;
+                        targetEmissive.copy(pd.baseTeamColor).multiplyScalar(emissiveIntensity);
                     } else if (isActiveTurn) {
-                        targetEmissive.copy(pd.baseTeamColor).multiplyScalar(0.12);
+                        const turnIntensity = renderer.xr.isPresenting ? 0.03 : 0.12;
+                        targetEmissive.copy(pd.baseTeamColor).multiplyScalar(turnIntensity);
                     } else { targetEmissive.copy(emissiveOff); }
+                    
                     pd.cylinder.material[0].emissive.lerp(targetEmissive, delta * 10);
                     pd.cylinder.material[1].emissive.lerp(targetEmissive, delta * 10);
                     pd.cylinder.material[2].emissive.lerp(targetEmissive, delta * 10);
